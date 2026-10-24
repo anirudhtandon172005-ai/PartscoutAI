@@ -17,6 +17,8 @@ import {
   Layers,
   Sparkles,
   RotateCcw,
+  ArrowRight,
+  XCircle,
 } from 'lucide-react';
 import { getCandidates, CandidateResponse, CandidateEvidence } from '../api/searches';
 
@@ -200,6 +202,8 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
     isPartSaved,
     setActiveEvidence,
     addToast,
+    evaluateCandidateGuardrails,
+    guardrails,
   } = useApp();
 
   const currentReq = requests.find((r) => r.id === requestId) || requests[0];
@@ -442,6 +446,32 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
         </div>
       </div>
 
+      {/* Self-Improving Safeguard Header Banner */}
+      <div className="self-improving-summary-banner mb-4">
+        <div className="banner-left">
+          <div className="shield-icon-badge">
+            <ShieldCheck size={20} className="text-teal" />
+          </div>
+          <div>
+            <div className="banner-title-strong">
+              <strong>Self-Improving Guardrail Shield Active:</strong>{' '}
+              <span className="text-teal font-semibold">Zero Repeat Mistakes Enforced</span>
+            </div>
+            <p className="banner-subtext">
+              Screening all alternatives against {guardrails.filter((g) => g.active).length} past factory failure guardrails. Candidates with past washdown or clearance failures are automatically penalized or blocked.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => navigate('/app/learning-loop')}
+        >
+          <span>Inspect Guardrails & Mistakes ({guardrails.length})</span>
+          <ArrowRight size={13} />
+        </button>
+      </div>
+
       {/* Candidate Parts List */}
       <div className="candidates-list-container">
         {filteredCandidates.length === 0 ? (
@@ -468,16 +498,41 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
             const isSaved = isPartSaved(candidate.id);
             const bestOffer = candidate.offers.sort((a, b) => a.reportedPrice - b.reportedPrice)[0];
 
+            // Evaluate against Self-Improving Loop
+            const guardResult = evaluateCandidateGuardrails(candidate, currentReq.machineId);
+            const adjustedScore = Math.max(10, Math.min(100, candidate.matchScore + guardResult.scoreAdjustment));
+
             return (
-              <div key={candidate.id} className="candidate-card">
+              <div key={candidate.id} className={`candidate-card ${guardResult.blocked ? 'candidate-card-blocked' : ''}`}>
                 {/* Left: Match Score Pillar */}
                 <div className="match-score-pillar">
-                  <div className={`score-circle ${candidate.matchScore >= 95 ? 'score-high' : candidate.matchScore >= 90 ? 'score-med' : 'score-low'}`}>
-                    <span className="score-number tech-font">{candidate.matchScore}%</span>
-                    <span className="score-desc">Match</span>
+                  <div
+                    className={`score-circle ${
+                      adjustedScore >= 95 ? 'score-high' : adjustedScore >= 80 ? 'score-med' : 'score-low'
+                    }`}
+                  >
+                    <span className="score-number tech-font">{adjustedScore}%</span>
+                    <span className="score-desc">
+                      {guardResult.scoreAdjustment !== 0 ? 'Guarded' : 'Match'}
+                    </span>
                   </div>
-                  <span className={`status-pill mt-2 ${candidate.overallStatus === 'Drop-in Replacement' ? 'status-pill-teal' : 'status-pill-amber'}`}>
-                    {candidate.overallStatus}
+
+                  {guardResult.scoreAdjustment !== 0 && (
+                    <span className="raw-score-indicator tech-font">
+                      Raw: {candidate.matchScore}% ({guardResult.scoreAdjustment}%)
+                    </span>
+                  )}
+
+                  <span
+                    className={`status-pill mt-2 ${
+                      guardResult.blocked
+                        ? 'status-pill-red'
+                        : candidate.overallStatus === 'Drop-in Replacement'
+                        ? 'status-pill-teal'
+                        : 'status-pill-amber'
+                    }`}
+                  >
+                    {guardResult.blocked ? 'Blocked by Guardrail' : candidate.overallStatus}
                   </span>
                 </div>
 
@@ -491,8 +546,40 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
 
                   <p className="candidate-description">{candidate.description}</p>
 
+                  {/* Guardrail Violation / Verification Alert Box */}
+                  {!guardResult.passed ? (
+                    <div className={`guardrail-candidate-banner ${guardResult.blocked ? 'banner-blocked' : 'banner-penalized'} mt-3`}>
+                      <div className="banner-title-line">
+                        {guardResult.blocked ? (
+                          <XCircle size={15} className="text-red" />
+                        ) : (
+                          <AlertTriangle size={15} className="text-orange" />
+                        )}
+                        <span className="font-bold">
+                          {guardResult.blocked ? 'PAST MISTAKE REPETITION BLOCKED' : 'GUARDRAIL DEDUCTION APPLIED'}:{' '}
+                          {guardResult.violations[0].guardrailTitle}
+                        </span>
+                      </div>
+                      <p className="guardrail-incident-text mt-1">{guardResult.violations[0].warning}</p>
+                    </div>
+                  ) : (
+                    <div className="guardrail-candidate-banner banner-verified mt-3">
+                      <div className="banner-title-line">
+                        <ShieldCheck size={14} className="text-emerald" />
+                        <span className="font-bold text-emerald">
+                          Self-Improving Shield: Verified Safe for Production
+                        </span>
+                      </div>
+                      <p className="guardrail-incident-text mt-1">
+                        {guardResult.verifiedGuards.length > 0
+                          ? guardResult.verifiedGuards[0].benefit
+                          : 'Checked against all historical factory failure incidents. Zero vulnerability patterns identified.'}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Key specs badge pills */}
-                  <div className="key-specs-flow">
+                  <div className="key-specs-flow mt-3">
                     <div className="spec-tag-item">
                       <span className="spec-k">Thread:</span>
                       <strong className="spec-v tech-font">{candidate.keySpecs['Thread Size']}</strong>
@@ -521,7 +608,7 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
 
                   {/* Uncertainty / Caveat callouts if any */}
                   {candidate.uncertaintyNotes.length > 0 && (
-                    <div className="uncertainty-callout-row">
+                    <div className="uncertainty-callout-row mt-2">
                       <AlertTriangle size={13} className="text-amber" />
                       <span>
                         <strong>Engineering Flag:</strong> {candidate.uncertaintyNotes[0]}
@@ -531,7 +618,7 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
 
                   {/* Evidence quick citation */}
                   {candidate.evidence.length > 0 && (
-                    <div className="evidence-citation-line">
+                    <div className="evidence-citation-line mt-2">
                       <ShieldCheck size={13} className="text-teal" />
                       <span>Source Evidence:</span>
                       <button

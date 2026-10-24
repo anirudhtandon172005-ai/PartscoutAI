@@ -9,6 +9,9 @@ import {
   CollectionJob,
   DataQualityIssue,
   SourceEvidence,
+  LearnedGuardrail,
+  PastMistakeIncident,
+  GuardrailEvaluationResult,
 } from '../types';
 import {
   MOCK_MACHINES,
@@ -21,6 +24,8 @@ import {
   MOCK_COLLECTION_JOBS,
   MOCK_QUALITY_ISSUES,
 } from '../data/mockData';
+import { INITIAL_GUARDRAILS, INITIAL_PAST_MISTAKES } from '../data/selfImprovingData';
+import { evaluateComponentGuardrails as evaluateGuardrailsUtil } from '../utils/selfImprovingEngine';
 import { createSearch, SearchCreateRequest } from '../api/searches';
 
 export interface ToastMessage {
@@ -84,6 +89,29 @@ interface AppContextType {
   removeToast: (id: string) => void;
   activeEvidence: SourceEvidence | null;
   setActiveEvidence: (evidence: SourceEvidence | null) => void;
+  // Self-Improving Loop
+  guardrails: LearnedGuardrail[];
+  pastMistakes: PastMistakeIncident[];
+  toggleGuardrail: (id: string) => void;
+  logPastMistake: (data: {
+    machineId: string;
+    machineName: string;
+    partNumber: string;
+    manufacturer: string;
+    mistakeType: string;
+    severity: PastMistakeIncident['severity'];
+    failureDescription: string;
+    rootCause: string;
+    preventionAction: string;
+    ruleTitle: string;
+    ruleCondition: string;
+    category: LearnedGuardrail['category'];
+    blockPart: boolean;
+    penaltyPoints: number;
+  }) => void;
+  resetGuardrailsToDefault: () => void;
+  evaluateCandidateGuardrails: (component: ComponentItem, machineId?: string) => GuardrailEvaluationResult;
+  totalMistakesPrevented: number;
 }
 
 const defaultDraft: DraftRequestData = {
@@ -384,6 +412,134 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Evidence Drawer modal
   const [activeEvidence, setActiveEvidence] = useState<SourceEvidence | null>(null);
 
+  // Self-Improving Loop State
+  const [guardrails, setGuardrails] = useState<LearnedGuardrail[]>(() => {
+    try {
+      const local = localStorage.getItem('partscout_guardrails');
+      return local ? JSON.parse(local) : INITIAL_GUARDRAILS;
+    } catch {
+      return INITIAL_GUARDRAILS;
+    }
+  });
+
+  const [pastMistakes, setPastMistakes] = useState<PastMistakeIncident[]>(() => {
+    try {
+      const local = localStorage.getItem('partscout_past_mistakes');
+      return local ? JSON.parse(local) : INITIAL_PAST_MISTAKES;
+    } catch {
+      return INITIAL_PAST_MISTAKES;
+    }
+  });
+
+  const toggleGuardrail = (id: string) => {
+    setGuardrails((prev) => {
+      const updated = prev.map((g) => (g.id === id ? { ...g, active: !g.active } : g));
+      try {
+        localStorage.setItem('partscout_guardrails', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+    const target = guardrails.find((g) => g.id === id);
+    const newStatus = target ? !target.active : false;
+    addToast(
+      newStatus ? 'Guardrail Activated' : 'Guardrail Deactivated',
+      `Self-improving constraint "${target?.title || id}" is now ${newStatus ? 'ENABLED' : 'PAUSED'}.`,
+      newStatus ? 'success' : 'warning'
+    );
+  };
+
+  const resetGuardrailsToDefault = () => {
+    setGuardrails(INITIAL_GUARDRAILS);
+    setPastMistakes(INITIAL_PAST_MISTAKES);
+    localStorage.removeItem('partscout_guardrails');
+    localStorage.removeItem('partscout_past_mistakes');
+    addToast('Loop Reset', 'Reset all learned guardrails and mistake histories to baseline factory benchmarks.', 'info');
+  };
+
+  const logPastMistake = (data: {
+    machineId: string;
+    machineName: string;
+    partNumber: string;
+    manufacturer: string;
+    mistakeType: string;
+    severity: PastMistakeIncident['severity'];
+    failureDescription: string;
+    rootCause: string;
+    preventionAction: string;
+    ruleTitle: string;
+    ruleCondition: string;
+    category: LearnedGuardrail['category'];
+    blockPart: boolean;
+    penaltyPoints: number;
+  }) => {
+    const newIncId = `inc-${Date.now()}`;
+    const newIncNumber = `INC-2026-${Math.floor(2000 + Math.random() * 8000)}`;
+    const newGuardId = `guard-${Date.now()}`;
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    const newGuardrail: LearnedGuardrail = {
+      id: newGuardId,
+      title: data.ruleTitle,
+      category: data.category,
+      targetMachineId: data.machineId,
+      targetMachineName: data.machineName,
+      ruleCondition: data.ruleCondition,
+      penaltyPoints: data.penaltyPoints,
+      blockPart: data.blockPart,
+      preventedMistakeCount: 1,
+      originIncidentId: newIncId,
+      incidentSummary: `Synthesised from ${newIncNumber}: ${data.mistakeType}`,
+      dateLearned: now.substring(0, 10),
+      active: true,
+    };
+
+    const newIncident: PastMistakeIncident = {
+      id: newIncId,
+      incidentNumber: newIncNumber,
+      machineId: data.machineId,
+      machineName: data.machineName,
+      partNumber: data.partNumber,
+      manufacturer: data.manufacturer,
+      mistakeType: data.mistakeType,
+      severity: data.severity,
+      failureDescription: data.failureDescription,
+      rootCause: data.rootCause,
+      preventionAction: data.preventionAction,
+      reportedBy: `${currentUser.name} (${currentUser.roleTitle})`,
+      reportedDate: now,
+      status: 'Guarded & Prevented',
+      guardrailId: newGuardId,
+      preventionCount: 1,
+    };
+
+    setGuardrails((prev) => {
+      const updated = [newGuardrail, ...prev];
+      localStorage.setItem('partscout_guardrails', JSON.stringify(updated));
+      return updated;
+    });
+
+    setPastMistakes((prev) => {
+      const updated = [newIncident, ...prev];
+      localStorage.setItem('partscout_past_mistakes', JSON.stringify(updated));
+      return updated;
+    });
+
+    addToast(
+      'Self-Improving Engine Updated',
+      `Logged incident ${newIncNumber} & deployed Guardrail "${data.ruleTitle}". PartScout will prevent this mistake in future searches!`,
+      'success'
+    );
+  };
+
+  const evaluateCandidateGuardrails = (component: ComponentItem, machineId?: string): GuardrailEvaluationResult => {
+    const selectedMachine = machineId ? MOCK_MACHINES.find((m) => m.id === machineId) : MOCK_MACHINES[0];
+    return evaluateGuardrailsUtil(component, selectedMachine, guardrails);
+  };
+
+  const totalMistakesPrevented = guardrails.reduce((acc, g) => acc + (g.active ? g.preventedMistakeCount : 0), 0);
+
   const allParts = [TARGET_ORIGINAL_PART, ...CANDIDATE_COMPONENTS];
 
   return (
@@ -423,6 +579,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeToast,
         activeEvidence,
         setActiveEvidence,
+        guardrails,
+        pastMistakes,
+        toggleGuardrail,
+        logPastMistake,
+        resetGuardrailsToDefault,
+        evaluateCandidateGuardrails,
+        totalMistakesPrevented,
       }}
     >
       {children}

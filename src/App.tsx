@@ -23,6 +23,7 @@ import { PartTrackingPage } from './pages/PartTrackingPage';
 import { QuotationManagementPage } from './pages/QuotationManagementPage';
 import { ProfileSettingsPage } from './pages/ProfileSettingsPage';
 import { AdminPages } from './pages/AdminPages';
+import { SelfImprovingLoopPage } from './pages/SelfImprovingLoopPage';
 
 const AppRouter: React.FC = () => {
   const { currentRoute } = useApp();
@@ -96,6 +97,9 @@ const AppRouter: React.FC = () => {
     }
     if (currentRoute === '/app/settings') {
       return <ProfileSettingsPage />;
+    }
+    if (currentRoute === '/app/learning-loop' || currentRoute === '/app/self-improving' || currentRoute === '/admin/learning-loop') {
+      return <SelfImprovingLoopPage />;
     }
 
     // Admin Suite

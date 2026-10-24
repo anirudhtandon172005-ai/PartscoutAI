@@ -167,3 +167,58 @@ export interface DataQualityIssue {
   detectedAt: string;
   resolved: boolean;
 }
+
+export interface LearnedGuardrail {
+  id: string;
+  title: string;
+  category: 'Mechanical Clearance' | 'Environmental Washdown' | 'Electrical Polarity' | 'Supplier Reliability' | 'Datasheet Conflict';
+  targetMachineId?: string;
+  targetMachineName?: string;
+  ruleCondition: string;
+  penaltyPoints: number;
+  blockPart: boolean;
+  preventedMistakeCount: number;
+  originIncidentId: string;
+  incidentSummary: string;
+  dateLearned: string;
+  active: boolean;
+}
+
+export interface PastMistakeIncident {
+  id: string;
+  incidentNumber: string;
+  machineId: string;
+  machineName: string;
+  partNumber: string;
+  manufacturer: string;
+  mistakeType: string;
+  severity: 'Critical (Line Down)' | 'High' | 'Medium';
+  failureDescription: string;
+  rootCause: string;
+  preventionAction: string;
+  reportedBy: string;
+  reportedDate: string;
+  status: 'Guarded & Prevented' | 'Active Monitoring';
+  guardrailId: string;
+  preventionCount: number;
+}
+
+export interface GuardrailViolation {
+  guardrailId: string;
+  guardrailTitle: string;
+  incidentNumber: string;
+  warning: string;
+  block: boolean;
+  penalty: number;
+}
+
+export interface GuardrailEvaluationResult {
+  passed: boolean;
+  blocked: boolean;
+  scoreAdjustment: number;
+  violations: GuardrailViolation[];
+  verifiedGuards: {
+    guardrailTitle: string;
+    benefit: string;
+  }[];
+}

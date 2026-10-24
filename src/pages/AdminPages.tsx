@@ -43,6 +43,8 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
     suppliers,
     navigate,
     addToast,
+    guardrails,
+    totalMistakesPrevented,
   } = useApp();
 
   // Add source modal state
@@ -554,6 +556,24 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Self-Improving Loop Integration Card */}
+          <div className="panel-footer-disclaimer mt-4 flex-between">
+            <div className="flex-start-gap">
+              <FileCheck2 size={16} className="text-teal" />
+              <div>
+                <strong>Self-Improving Closed Loop Active:</strong> Resolved discrepancies and field fitment rejections automatically synthesize into <strong>{guardrails.length} active constraint guardrails</strong>, preventing {totalMistakesPrevented} repeat machine failures.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline btn-xs"
+              onClick={() => navigate('/admin/learning-loop')}
+            >
+              <span>Manage Learning Loop ({guardrails.length})</span>
+              <ExternalLink size={11} />
+            </button>
           </div>
         </div>
       )}

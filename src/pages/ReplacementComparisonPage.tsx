@@ -14,6 +14,9 @@ import {
   Building,
   ArrowRight,
   Bookmark,
+  ShieldAlert,
+  Sparkles,
+  PlusCircle,
 } from 'lucide-react';
 
 export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ candidateId = 'part-ifm-igt205' }) => {
@@ -25,11 +28,13 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
     toggleSavePart,
     isPartSaved,
     addToast,
+    evaluateCandidateGuardrails,
   } = useApp();
 
   const [selectedCandidateId, setSelectedCandidateId] = useState(candidateId);
   const candidate = candidates.find((c) => c.id === selectedCandidateId) || candidates[0];
 
+  const guardResult = evaluateCandidateGuardrails(candidate, 'mach-rf480-line4');
   const isSaved = isPartSaved(candidate.id);
 
   // Group specs by category
@@ -110,6 +115,46 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
           <p className="warning-body">
             PartScout AI comparison scores (e.g. {candidate.matchScore}%) reflect algorithmic parameter correlation between verified manufacturer datasheets. <strong>A high score does NOT constitute certified equipment interchangeability or manufacturer endorsement.</strong> Plant maintenance engineers must review physical clearances, mounting bracket torques, PLC input thresholds, and environmental sanitation procedures prior to installation.
           </p>
+        </div>
+      </div>
+
+      {/* Self-Improving Loop Guardrail Audit Banner */}
+      <div className={`compare-guardrail-banner ${guardResult.passed ? 'guard-passed' : 'guard-warning'} mt-4 mb-4`}>
+        <div className="banner-content-row">
+          <div className="guard-icon-slot">
+            {guardResult.passed ? (
+              <ShieldCheck size={24} className="text-emerald" />
+            ) : (
+              <ShieldAlert size={24} className="text-orange" />
+            )}
+          </div>
+          <div className="guard-details-text flex-1">
+            <div className="guard-heading-line">
+              <span className="guard-heading-strong">
+                {guardResult.passed
+                  ? 'Self-Improving Loop Verification: Zero Past Incident Risks Detected'
+                  : `Self-Improving Guardrail Triggered: ${guardResult.violations[0].guardrailTitle}`}
+              </span>
+              <span className={`guard-status-pill ${guardResult.passed ? 'pill-teal' : 'pill-orange'}`}>
+                {guardResult.passed ? 'PASSED & GUARDED' : guardResult.blocked ? 'REPETITIVE MISTAKE BLOCKED' : 'TOLERANCE REVIEW'}
+              </span>
+            </div>
+            <p className="guard-text-p mt-1">
+              {guardResult.passed
+                ? (guardResult.verifiedGuards[0]?.benefit || 'This candidate complies with all 5 historical Plant B4 failure guardrails (caustic washdown, barrel depth, polarity).')
+                : guardResult.violations[0].warning}
+            </p>
+          </div>
+          <div className="guard-action-slot">
+            <button
+              type="button"
+              className="btn btn-outline btn-xs"
+              onClick={() => navigate('/app/learning-loop')}
+            >
+              <Sparkles size={12} />
+              <span>Learning Loop Engine</span>
+            </button>
+          </div>
         </div>
       </div>
 

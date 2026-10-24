@@ -35,7 +35,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
-  const { currentRoute, navigate, savedPartIds, requests, qualityIssues } = useApp();
+  const { currentRoute, navigate, savedPartIds, requests, qualityIssues, guardrails } = useApp();
 
   const isAdmin = currentRoute.startsWith('/admin');
   const activeRequestId = requests[0]?.id || 'req-line4-sensor';
@@ -214,6 +214,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                       '/app/parts/part-ifm-igt205',
                       'Interactive CAD Inspector',
                       <Wrench size={14} />
+                    )}
+                    {navItem(
+                      '/app/learning-loop',
+                      'Self-Improving Engine',
+                      <ShieldCheck size={14} />,
+                      guardrails.filter((g) => g.active).length,
+                      'teal'
                     )}
                   </div>
                 )}
@@ -406,6 +413,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                       <ShieldAlert size={14} />,
                       pendingIssuesCount,
                       'orange'
+                    )}
+                    {navItem(
+                      '/admin/learning-loop',
+                      'Self-Improving Engine',
+                      <ShieldCheck size={14} />,
+                      guardrails.filter((g) => g.active).length,
+                      'teal'
                     )}
                   </div>
                 )}
