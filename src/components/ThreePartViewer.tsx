@@ -1,6 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { RotateCw, Eye, Layers, Zap, Info, ShieldCheck } from 'lucide-react';
+import {
+  RotateCw,
+  Eye,
+  Layers,
+  Zap,
+  ShieldCheck,
+  RefreshCw,
+  CheckCircle2,
+  Radio,
+  Sliders
+} from 'lucide-react';
 
 interface ThreePartViewerProps {
   partNumber?: string;
@@ -11,7 +21,7 @@ interface ThreePartViewerProps {
 
 export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
   partNumber = 'BES 516-325-G-E5-C-S4 / IGT205',
-  manufacturer = 'Standard M18x1 Architecture',
+  manufacturer = 'Standard M18x1 CAD Digital Twin',
   highlightSpecs = true,
   compact = false,
 }) => {
@@ -21,282 +31,481 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
   const [targetDetected, setTargetDetected] = useState<boolean>(false);
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
   const [activeCallout, setActiveCallout] = useState<string | null>(null);
+  const [dimensionsVisible, setDimensionsVisible] = useState<boolean>(true);
+  const [viewPreset, setViewPreset] = useState<'iso' | 'front' | 'face' | 'connector'>('iso');
 
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const modelGroupRef = useRef<THREE.Group | null>(null);
-  const ledMeshRef = useRef<THREE.Mesh | null>(null);
-  const targetMeshRef = useRef<THREE.Mesh | null>(null);
-  const nut1Ref = useRef<THREE.Mesh | null>(null);
-  const nut2Ref = useRef<THREE.Mesh | null>(null);
-  const sensingFaceRef = useRef<THREE.Mesh | null>(null);
-  const connectorRef = useRef<THREE.Mesh | null>(null);
+
+  // Animation targets for smooth lerping
+  const animStateRef = useRef({
+    explodedProgress: 0,
+    targetProgress: 0,
+    isTargetActive: false,
+    pulseTime: 0,
+  });
+
+  const partsRef = useRef<{
+    nut1?: THREE.Mesh;
+    nut2?: THREE.Mesh;
+    sensingFace?: THREE.Mesh;
+    connectorGroup?: THREE.Group;
+    ledMesh?: THREE.Mesh;
+    ledLight?: THREE.PointLight;
+    targetMesh?: THREE.Mesh;
+    radarPulseRing?: THREE.Mesh;
+    dimensionLinesGroup?: THREE.Group;
+    barrelMesh?: THREE.Mesh;
+  }>({});
+
+  useEffect(() => {
+    animStateRef.current.isTargetActive = targetDetected;
+  }, [targetDetected]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // Scene
+    // 1. Scene
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
-    // Camera
-    const width = container.clientWidth || 600;
-    const height = container.clientHeight || 400;
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+    // 2. Camera
+    const width = container.clientWidth || 640;
+    const height = container.clientHeight || 440;
+    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
     camera.position.set(0, 5, 14);
+    cameraRef.current = camera;
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // 3. Renderer with high-end settings
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
     rendererRef.current = renderer;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // Lighting (Industrial Studio HDRI style)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
-    scene.add(ambientLight);
+    // 4. Lighting System (Industrial Studio Lighting)
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, 1.4);
+    scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff5e6, 2.2);
-    keyLight.position.set(8, 12, 10);
+    const keyLight = new THREE.DirectionalLight(0xfff7ed, 3.2);
+    keyLight.position.set(8, 14, 10);
     keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 1024;
+    keyLight.shadow.mapSize.height = 1024;
+    keyLight.shadow.bias = -0.0001;
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0x90c0df, 1.6);
-    rimLight.position.set(-10, -5, -8);
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 2.4);
+    rimLight.position.set(-10, -3, -8);
     scene.add(rimLight);
 
-    const fillLight = new THREE.DirectionalLight(0xd9e2ec, 1.0);
-    fillLight.position.set(0, -10, 8);
+    const fillLight = new THREE.DirectionalLight(0xe0e7ff, 1.2);
+    fillLight.position.set(-8, 6, 8);
     scene.add(fillLight);
 
-    // Grid Floor
-    const gridHelper = new THREE.GridHelper(16, 16, 0x0e6251, 0xd0c9b8);
-    gridHelper.position.y = -3.2;
-    scene.add(gridHelper);
+    const bottomBounce = new THREE.DirectionalLight(0xd97706, 0.6);
+    bottomBounce.position.set(0, -10, 4);
+    scene.add(bottomBounce);
 
-    // Model Root Group
+    // 5. Studio Pedestal / Ground Shadow Disc
+    const groundGroup = new THREE.Group();
+    groundGroup.position.y = -3.4;
+
+    const shadowPlateGeom = new THREE.CircleGeometry(4.5, 48);
+    const shadowPlateMat = new THREE.MeshBasicMaterial({
+      color: 0x0f172a,
+      transparent: true,
+      opacity: 0.18,
+    });
+    const shadowPlate = new THREE.Mesh(shadowPlateGeom, shadowPlateMat);
+    shadowPlate.rotation.x = -Math.PI / 2;
+    groundGroup.add(shadowPlate);
+
+    // Precision Industrial Measurement Grid
+    const gridHelper = new THREE.GridHelper(16, 24, 0x0ea5e9, 0xcfd8dc);
+    gridHelper.position.y = 0.01;
+    groundGroup.add(gridHelper);
+
+    scene.add(groundGroup);
+
+    // 6. Model Root Group
     const modelGroup = new THREE.Group();
     modelGroup.rotation.z = Math.PI / 10;
     modelGroup.rotation.y = -Math.PI / 4;
     scene.add(modelGroup);
     modelGroupRef.current = modelGroup;
 
-    // Materials
-    const metalMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd8dde3,
+    // 7. Photorealistic Industrial Materials
+    const polishedSteelMaterial = new THREE.MeshStandardMaterial({
+      color: 0xced4da,
+      metalness: 0.94,
+      roughness: 0.18,
+    });
+
+    const threadCutMaterial = new THREE.MeshStandardMaterial({
+      color: 0xa0abb6,
+      metalness: 0.9,
+      roughness: 0.28,
+    });
+
+    const brushedBrassMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd4af37,
       metalness: 0.88,
-      roughness: 0.22,
-      wireframe: false,
+      roughness: 0.26,
     });
 
-    const threadRidgeMaterial = new THREE.MeshStandardMaterial({
-      color: 0xb5bdc7,
-      metalness: 0.82,
+    const peekFaceMaterial = new THREE.MeshStandardMaterial({
+      color: 0x1e242b,
       roughness: 0.35,
+      metalness: 0.08,
     });
 
-    const brassNutMaterial = new THREE.MeshStandardMaterial({
-      color: 0xc8b27a,
-      metalness: 0.85,
-      roughness: 0.32,
-    });
-
-    const sensingFaceMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1f2937,
-      roughness: 0.45,
-      metalness: 0.1,
-    });
-
-    const ledMaterial = new THREE.MeshStandardMaterial({
-      color: 0x553300,
+    const amberLedMaterial = new THREE.MeshStandardMaterial({
+      color: 0x451a03,
       emissive: 0x000000,
+      emissiveIntensity: 0,
       roughness: 0.1,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.92,
     });
 
-    const connectorMaterial = new THREE.MeshStandardMaterial({
-      color: 0x2b323c,
-      metalness: 0.7,
-      roughness: 0.35,
+    const connectorBodyMaterial = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      metalness: 0.75,
+      roughness: 0.3,
     });
 
     const goldPinMaterial = new THREE.MeshStandardMaterial({
-      color: 0xf39c12,
-      metalness: 0.95,
-      roughness: 0.1,
+      color: 0xf59e0b,
+      metalness: 0.98,
+      roughness: 0.08,
     });
 
-    // 1. Threaded Barrel Body (M18 Cylinder, length = 6.5)
+    // 8. Geometry Construction
     const barrelRadius = 1.0;
-    const barrelLength = 6.0;
-    const barrelGeom = new THREE.CylinderGeometry(barrelRadius, barrelRadius, barrelLength, 32);
-    const barrelMesh = new THREE.Mesh(barrelGeom, metalMaterial);
+    const barrelLength = 6.2;
+
+    // A. Main Threaded Cylinder Body
+    const barrelGeom = new THREE.CylinderGeometry(barrelRadius, barrelRadius, barrelLength, 48);
+    const barrelMesh = new THREE.Mesh(barrelGeom, polishedSteelMaterial);
     barrelMesh.castShadow = true;
     barrelMesh.receiveShadow = true;
     modelGroup.add(barrelMesh);
+    partsRef.current.barrelMesh = barrelMesh;
 
-    // Thread rings simulation
-    const ringCount = 28;
-    const ringSpacing = 0.16;
-    for (let i = 0; i < ringCount; i++) {
-      const ringGeom = new THREE.TorusGeometry(barrelRadius + 0.02, 0.022, 8, 32);
-      const ringMesh = new THREE.Mesh(ringGeom, threadRidgeMaterial);
-      ringMesh.rotation.x = Math.PI / 2;
-      ringMesh.position.y = -1.8 + i * ringSpacing;
-      modelGroup.add(ringMesh);
+    // Helical Thread Ridges simulation
+    const threadCount = 36;
+    const threadSpacing = 0.14;
+    const threadsGroup = new THREE.Group();
+    for (let i = 0; i < threadCount; i++) {
+      const threadTorus = new THREE.TorusGeometry(barrelRadius + 0.022, 0.025, 12, 48);
+      const threadMesh = new THREE.Mesh(threadTorus, threadCutMaterial);
+      threadMesh.rotation.x = Math.PI / 2;
+      threadMesh.position.y = -2.1 + i * threadSpacing;
+      threadsGroup.add(threadMesh);
     }
+    barrelMesh.add(threadsGroup);
 
-    // 2. Sensing Head Front Face (Top of sensor, y = +3.0)
-    const faceGeom = new THREE.CylinderGeometry(barrelRadius - 0.05, barrelRadius - 0.05, 0.4, 32);
-    const faceMesh = new THREE.Mesh(faceGeom, sensingFaceMaterial);
-    faceMesh.position.y = barrelLength / 2 + 0.18;
-    faceMesh.castShadow = true;
-    modelGroup.add(faceMesh);
-    sensingFaceRef.current = faceMesh;
+    // B. Sensing Face Front Cap (PEEK / Flush Shielded)
+    const sensingFaceMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(barrelRadius - 0.04, barrelRadius - 0.04, 0.42, 48),
+      peekFaceMaterial
+    );
+    sensingFaceMesh.position.y = barrelLength / 2 + 0.21;
+    sensingFaceMesh.castShadow = true;
+    modelGroup.add(sensingFaceMesh);
+    partsRef.current.sensingFace = sensingFaceMesh;
 
-    // Sensing face core label ring
-    const coreRingGeom = new THREE.RingGeometry(0.2, 0.65, 24);
-    const coreRingMat = new THREE.MeshBasicMaterial({ color: 0x117a65, side: THREE.DoubleSide });
-    const coreRingMesh = new THREE.Mesh(coreRingGeom, coreRingMat);
-    coreRingMesh.rotation.x = -Math.PI / 2;
-    coreRingMesh.position.y = barrelLength / 2 + 0.39;
-    modelGroup.add(coreRingMesh);
+    // Target crosshair & concentric coil ring
+    const coilRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.25, 0.75, 36),
+      new THREE.MeshBasicMaterial({ color: 0x0d9488, side: THREE.DoubleSide })
+    );
+    coilRing.rotation.x = -Math.PI / 2;
+    coilRing.position.y = 0.22;
+    sensingFaceMesh.add(coilRing);
 
-    // 3. Hexagonal Lock Nuts (M18 Hexagon)
-    const nutShape = new THREE.Shape();
-    const hexR = 1.75;
-    for (let i = 0; i < 6; i++) {
-      const angle = (i * Math.PI) / 3;
-      const x = hexR * Math.cos(angle);
-      const y = hexR * Math.sin(angle);
-      if (i === 0) nutShape.moveTo(x, y);
-      else nutShape.lineTo(x, y);
-    }
-    nutShape.closePath();
+    const coilCenterDot = new THREE.Mesh(
+      new THREE.CircleGeometry(0.12, 24),
+      new THREE.MeshBasicMaterial({ color: 0xf97316, side: THREE.DoubleSide })
+    );
+    coilCenterDot.rotation.x = -Math.PI / 2;
+    coilCenterDot.position.y = 0.221;
+    sensingFaceMesh.add(coilCenterDot);
 
-    const nutHole = new THREE.Path();
-    nutHole.absarc(0, 0, barrelRadius + 0.04, 0, Math.PI * 2, true);
-    nutShape.holes.push(nutHole);
+    // Dynamic Sensing Field Pulse Ring
+    const radarPulseGeom = new THREE.RingGeometry(0.9, 1.25, 36);
+    const radarPulseMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+    });
+    const radarPulseMesh = new THREE.Mesh(radarPulseGeom, radarPulseMat);
+    radarPulseMesh.rotation.x = -Math.PI / 2;
+    radarPulseMesh.position.y = 0.23;
+    sensingFaceMesh.add(radarPulseMesh);
+    partsRef.current.radarPulseRing = radarPulseMesh;
 
-    const extrudeSettings = { depth: 0.5, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.04, bevelThickness: 0.04 };
-    const nutGeom = new THREE.ExtrudeGeometry(nutShape, extrudeSettings);
+    // C. M18 Hex Locknuts with Chamfer
+    const createHexNut = () => {
+      const nutShape = new THREE.Shape();
+      const hexR = 1.76;
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI) / 3;
+        const x = hexR * Math.cos(angle);
+        const y = hexR * Math.sin(angle);
+        if (i === 0) nutShape.moveTo(x, y);
+        else nutShape.lineTo(x, y);
+      }
+      nutShape.closePath();
 
-    const nut1 = new THREE.Mesh(nutGeom, brassNutMaterial);
-    nut1.rotation.x = Math.PI / 2;
-    nut1.position.y = 1.0;
-    nut1.castShadow = true;
+      const nutHole = new THREE.Path();
+      nutHole.absarc(0, 0, barrelRadius + 0.05, 0, Math.PI * 2, true);
+      nutShape.holes.push(nutHole);
+
+      const nutGeom = new THREE.ExtrudeGeometry(nutShape, {
+        depth: 0.52,
+        bevelEnabled: true,
+        bevelSegments: 4,
+        steps: 1,
+        bevelSize: 0.06,
+        bevelThickness: 0.06,
+      });
+
+      const nutMesh = new THREE.Mesh(nutGeom, brushedBrassMaterial);
+      nutMesh.rotation.x = Math.PI / 2;
+      nutMesh.castShadow = true;
+      nutMesh.receiveShadow = true;
+      return nutMesh;
+    };
+
+    const nut1 = createHexNut();
+    nut1.position.y = 1.1;
     modelGroup.add(nut1);
-    nut1Ref.current = nut1;
+    partsRef.current.nut1 = nut1;
 
-    const nut2 = new THREE.Mesh(nutGeom, brassNutMaterial);
-    nut2.rotation.x = Math.PI / 2;
-    nut2.rotation.z = Math.PI / 6; // slightly offset rotation for realism
-    nut2.position.y = -0.6;
-    nut2.castShadow = true;
+    const nut2 = createHexNut();
+    nut2.position.y = -0.7;
+    nut2.rotation.z = Math.PI / 6;
     modelGroup.add(nut2);
-    nut2Ref.current = nut2;
+    partsRef.current.nut2 = nut2;
 
-    // 4. Rear Cap & 360° Amber Output LED Ring
-    const ledGeom = new THREE.CylinderGeometry(barrelRadius + 0.03, barrelRadius + 0.03, 0.28, 32);
-    const ledMesh = new THREE.Mesh(ledGeom, ledMaterial);
-    ledMesh.position.y = -barrelLength / 2 - 0.14;
+    // D. Transparent 360° Amber Output LED Ring
+    const ledMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(barrelRadius + 0.04, barrelRadius + 0.04, 0.32, 48),
+      amberLedMaterial
+    );
+    ledMesh.position.y = -barrelLength / 2 - 0.16;
     modelGroup.add(ledMesh);
-    ledMeshRef.current = ledMesh;
+    partsRef.current.ledMesh = ledMesh;
 
-    // 5. M12 Connector Collar & 4 Gold Contact Pins
+    const ledLight = new THREE.PointLight(0xf59e0b, 0, 4);
+    ledLight.position.set(0, -barrelLength / 2 - 0.16, 0);
+    modelGroup.add(ledLight);
+    partsRef.current.ledLight = ledLight;
+
+    // E. Rear Connector Body & 4 Gold Pins
     const connectorGroup = new THREE.Group();
-    connectorGroup.position.y = -barrelLength / 2 - 0.75;
+    connectorGroup.position.y = -barrelLength / 2 - 0.78;
 
-    const collarGeom = new THREE.CylinderGeometry(0.72, 0.72, 0.95, 24);
-    const collarMesh = new THREE.Mesh(collarGeom, connectorMaterial);
+    const collarGeom = new THREE.CylinderGeometry(0.74, 0.74, 0.98, 32);
+    const collarMesh = new THREE.Mesh(collarGeom, connectorBodyMaterial);
     collarMesh.castShadow = true;
     connectorGroup.add(collarMesh);
 
-    // M12 4-pin arrangement inside socket
-    const pinGeom = new THREE.CylinderGeometry(0.045, 0.045, 0.45, 12);
+    const keyRidge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.6, 0.22),
+      connectorBodyMaterial
+    );
+    keyRidge.position.set(0, 0, 0.7);
+    connectorGroup.add(keyRidge);
+
     const pinOffsets = [
-      { x: 0.25, z: 0.25 },
-      { x: -0.25, z: 0.25 },
-      { x: -0.25, z: -0.25 },
-      { x: 0.25, z: -0.25 },
+      { x: 0.26, z: 0.26 },
+      { x: -0.26, z: 0.26 },
+      { x: -0.26, z: -0.26 },
+      { x: 0.26, z: -0.26 },
     ];
     pinOffsets.forEach((pos) => {
-      const pin = new THREE.Mesh(pinGeom, goldPinMaterial);
-      pin.position.set(pos.x, -0.4, pos.z);
+      const pin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.045, 0.44, 16),
+        goldPinMaterial
+      );
+      pin.position.set(pos.x, -0.42, pos.z);
       connectorGroup.add(pin);
     });
 
     modelGroup.add(connectorGroup);
-    connectorRef.current = collarMesh;
+    partsRef.current.connectorGroup = connectorGroup;
 
-    // 6. Test Metal Target Flag for Detection simulation
-    const targetGeom = new THREE.BoxGeometry(2.4, 0.15, 2.4);
+    // F. Test Steel Target Flag
+    const targetGeom = new THREE.BoxGeometry(2.6, 0.16, 2.6);
     const targetMat = new THREE.MeshStandardMaterial({
-      color: 0x95a5a6,
-      metalness: 0.9,
-      roughness: 0.2,
+      color: 0x94a3b8,
+      metalness: 0.92,
+      roughness: 0.15,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
     });
     const targetMesh = new THREE.Mesh(targetGeom, targetMat);
-    targetMesh.position.set(0, barrelLength / 2 + 2.5, 0);
+    targetMesh.position.set(0, 7.0, 0);
     targetMesh.visible = false;
     modelGroup.add(targetMesh);
-    targetMeshRef.current = targetMesh;
+    partsRef.current.targetMesh = targetMesh;
 
-    // Mouse Drag Rotation
+    // G. CAD Dimension Caliper Lines
+    const dimGroup = new THREE.Group();
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.85 });
+
+    const lengthPoints = [
+      new THREE.Vector3(2.2, barrelLength / 2, 0),
+      new THREE.Vector3(2.6, barrelLength / 2, 0),
+      new THREE.Vector3(2.5, barrelLength / 2, 0),
+      new THREE.Vector3(2.5, -barrelLength / 2, 0),
+      new THREE.Vector3(2.2, -barrelLength / 2, 0),
+      new THREE.Vector3(2.6, -barrelLength / 2, 0),
+    ];
+    const lengthGeom = new THREE.BufferGeometry().setFromPoints(lengthPoints);
+    const lengthLine = new THREE.Line(lengthGeom, lineMat);
+    dimGroup.add(lengthLine);
+
+    const diaPoints = [
+      new THREE.Vector3(-barrelRadius, barrelLength / 2 + 0.8, 0),
+      new THREE.Vector3(barrelRadius, barrelLength / 2 + 0.8, 0),
+    ];
+    const diaGeom = new THREE.BufferGeometry().setFromPoints(diaPoints);
+    const diaLine = new THREE.Line(diaGeom, lineMat);
+    dimGroup.add(diaLine);
+
+    modelGroup.add(dimGroup);
+    partsRef.current.dimensionLinesGroup = dimGroup;
+
+    // 9. Interactive Drag & Mouse Handling
     let isDragging = false;
-    let prevMousePos = { x: 0, y: 0 };
+    let prevMouse = { x: 0, y: 0 };
 
     const onMouseDown = (e: MouseEvent) => {
       isDragging = true;
-      prevMousePos = { x: e.clientX, y: e.clientY };
+      prevMouse = { x: e.clientX, y: e.clientY };
     };
 
     const onMouseMove = (e: MouseEvent) => {
       if (!isDragging || !modelGroupRef.current) return;
-      const deltaX = e.clientX - prevMousePos.x;
-      const deltaY = e.clientY - prevMousePos.y;
-      modelGroupRef.current.rotation.y += deltaX * 0.008;
-      modelGroupRef.current.rotation.x += deltaY * 0.008;
-      prevMousePos = { x: e.clientX, y: e.clientY };
+      const dx = e.clientX - prevMouse.x;
+      const dy = e.clientY - prevMouse.y;
+      modelGroupRef.current.rotation.y += dx * 0.009;
+      modelGroupRef.current.rotation.x += dy * 0.009;
+      prevMouse = { x: e.clientX, y: e.clientY };
     };
 
     const onMouseUp = () => {
       isDragging = false;
     };
 
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (!cameraRef.current) return;
+      cameraRef.current.position.z = THREE.MathUtils.clamp(
+        cameraRef.current.position.z + e.deltaY * 0.015,
+        7,
+        24
+      );
+    };
+
     const domEl = renderer.domElement;
     domEl.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+    domEl.addEventListener('wheel', onWheel, { passive: false });
 
-    // Responsive Resize
+    // 10. Resize Observer
     const handleResize = () => {
-      if (!containerRef.current || !rendererRef.current) return;
+      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
       const w = containerRef.current.clientWidth;
       const h = containerRef.current.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+      cameraRef.current.aspect = w / h;
+      cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(w, h);
     };
     window.addEventListener('resize', handleResize);
 
-    // Animation Loop
+    // 11. Render & Smooth Animation Loop
     let animationFrameId: number;
-    let clock = new THREE.Clock();
+    const clock = new THREE.Clock();
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
       const delta = clock.getDelta();
+      const state = animStateRef.current;
 
       if (autoRotate && !isDragging && modelGroupRef.current) {
-        modelGroupRef.current.rotation.y += delta * 0.45;
+        modelGroupRef.current.rotation.y += delta * 0.42;
+      }
+
+      // Smooth Exploded View Lerping
+      const targetExploded = exploded ? 1 : 0;
+      state.explodedProgress += (targetExploded - state.explodedProgress) * (delta * 6);
+
+      if (partsRef.current.nut1 && partsRef.current.nut2 && partsRef.current.sensingFace && partsRef.current.connectorGroup) {
+        const ep = state.explodedProgress;
+        partsRef.current.nut1.position.y = THREE.MathUtils.lerp(1.1, 2.7, ep);
+        partsRef.current.nut2.position.y = THREE.MathUtils.lerp(-0.7, -2.1, ep);
+        partsRef.current.sensingFace.position.y = THREE.MathUtils.lerp(barrelLength / 2 + 0.21, barrelLength / 2 + 1.6, ep);
+        partsRef.current.connectorGroup.position.y = THREE.MathUtils.lerp(-barrelLength / 2 - 0.78, -barrelLength / 2 - 2.2, ep);
+      }
+
+      // Smooth Target Flag Detection Lerping
+      const targetActive = state.isTargetActive ? 1 : 0;
+      state.targetProgress += (targetActive - state.targetProgress) * (delta * 7);
+
+      if (partsRef.current.targetMesh && partsRef.current.ledMesh && partsRef.current.ledLight && partsRef.current.radarPulseRing) {
+        const tp = state.targetProgress;
+        const targetMesh = partsRef.current.targetMesh;
+        const ledMesh = partsRef.current.ledMesh;
+        const ledLight = partsRef.current.ledLight;
+        const radar = partsRef.current.radarPulseRing;
+
+        if (tp > 0.02) {
+          targetMesh.visible = true;
+          const restingY = barrelLength / 2 + 0.21 + 0.8;
+          targetMesh.position.y = THREE.MathUtils.lerp(6.5, restingY, tp);
+        } else {
+          targetMesh.visible = false;
+        }
+
+        const ledMat = ledMesh.material as THREE.MeshStandardMaterial;
+        const radarMat = radar.material as THREE.MeshBasicMaterial;
+
+        if (tp > 0.8) {
+          state.pulseTime += delta * 3;
+          const pulse = (Math.sin(state.pulseTime) + 1) / 2;
+          ledMat.color.setHex(0xf59e0b);
+          ledMat.emissive.setHex(0xff7700);
+          ledMat.emissiveIntensity = 2.2 + pulse * 0.8;
+          ledLight.intensity = 2.8 + pulse * 1.0;
+
+          radarMat.opacity = THREE.MathUtils.lerp(0.3, 0.85, pulse);
+          radar.scale.set(1 + pulse * 0.45, 1 + pulse * 0.45, 1);
+        } else {
+          ledMat.color.setHex(0x451a03);
+          ledMat.emissive.setHex(0x000000);
+          ledMat.emissiveIntensity = 0;
+          ledLight.intensity = 0;
+          radarMat.opacity = 0;
+        }
       }
 
       renderer.render(scene, camera);
@@ -308,12 +517,12 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
       domEl.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
+      domEl.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', handleResize);
       renderer.dispose();
     };
-  }, [autoRotate]);
+  }, [autoRotate, exploded]);
 
-  // Handle Wireframe state toggle
   useEffect(() => {
     if (!modelGroupRef.current) return;
     modelGroupRef.current.traverse((child) => {
@@ -327,112 +536,173 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
     });
   }, [wireframe]);
 
-  // Handle Exploded view state
   useEffect(() => {
-    if (!nut1Ref.current || !nut2Ref.current || !sensingFaceRef.current || !connectorRef.current) return;
-    if (exploded) {
-      nut1Ref.current.position.y = 2.4;
-      nut2Ref.current.position.y = -1.8;
-      sensingFaceRef.current.position.y = 4.2;
-      connectorRef.current.parent!.position.y = -4.9;
-    } else {
-      nut1Ref.current.position.y = 1.0;
-      nut2Ref.current.position.y = -0.6;
-      sensingFaceRef.current.position.y = 3.18;
-      connectorRef.current.parent!.position.y = -3.75;
+    if (partsRef.current.dimensionLinesGroup) {
+      partsRef.current.dimensionLinesGroup.visible = dimensionsVisible;
     }
-  }, [exploded]);
+  }, [dimensionsVisible]);
 
-  // Handle Target detection simulation
-  useEffect(() => {
-    if (!targetMeshRef.current || !ledMeshRef.current) return;
-    const ledMat = ledMeshRef.current.material as THREE.MeshStandardMaterial;
+  const applyViewPreset = (preset: 'iso' | 'front' | 'face' | 'connector') => {
+    setViewPreset(preset);
+    if (!modelGroupRef.current || !cameraRef.current) return;
+    setAutoRotate(false);
 
-    if (targetDetected) {
-      targetMeshRef.current.visible = true;
-      targetMeshRef.current.position.y = 3.18 + 0.8; // Exactly 8.0mm in scale!
-      ledMat.color.setHex(0xffaa00);
-      ledMat.emissive.setHex(0xff8800);
-      ledMat.emissiveIntensity = 2.5;
-    } else {
-      targetMeshRef.current.visible = false;
-      targetMeshRef.current.position.y = 6.0;
-      ledMat.color.setHex(0x553300);
-      ledMat.emissive.setHex(0x000000);
-      ledMat.emissiveIntensity = 0;
+    switch (preset) {
+      case 'iso':
+        modelGroupRef.current.rotation.set(0.35, -Math.PI / 4, 0);
+        cameraRef.current.position.set(0, 5, 14);
+        break;
+      case 'front':
+        modelGroupRef.current.rotation.set(0, 0, 0);
+        cameraRef.current.position.set(0, 0, 13);
+        break;
+      case 'face':
+        modelGroupRef.current.rotation.set(Math.PI / 2, 0, 0);
+        cameraRef.current.position.set(0, 0, 11);
+        break;
+      case 'connector':
+        modelGroupRef.current.rotation.set(-Math.PI / 2, 0, 0);
+        cameraRef.current.position.set(0, 0, 11);
+        break;
     }
-  }, [targetDetected]);
+  };
+
+  const resetCamera = () => {
+    if (!modelGroupRef.current || !cameraRef.current) return;
+    modelGroupRef.current.rotation.set(Math.PI / 10, -Math.PI / 4, 0);
+    cameraRef.current.position.set(0, 5, 14);
+    setAutoRotate(true);
+    setViewPreset('iso');
+  };
 
   return (
     <div className={`three-viewer-wrapper ${compact ? 'compact' : ''}`}>
       <div className="three-viewer-header">
         <div className="three-viewer-meta">
-          <span className="badge-tag live-cad">
-            <span className="dot pulse"></span> 3D Precision Digital Twin
-          </span>
+          <div className="three-badge-row">
+            <span className="badge-tag live-cad">
+              <span className="dot pulse"></span> 3D Digital Twin
+            </span>
+            <span className="badge-tag verified-spec">
+              <CheckCircle2 size={12} /> IEC 60947-5-2
+            </span>
+          </div>
           <h4 className="three-viewer-title">{partNumber}</h4>
           <span className="three-viewer-subtitle">{manufacturer}</span>
         </div>
+
         <div className="three-viewer-specs-preview">
-          <span className="tech-pill">M18 x 1.0</span>
-          <span className="tech-pill">Sn = 8.0mm Flush</span>
+          <span className="tech-pill">Ø18 × 65mm</span>
+          <span className="tech-pill">Sn 8.0mm Flush</span>
           <span className="tech-pill">PNP NO • M12</span>
         </div>
       </div>
 
       <div className="three-canvas-container" ref={containerRef}>
-        {/* Three.js canvas mounts here */}
+        <div className="three-callout-overlay">
+          <button
+            className={`callout-node node-sensing ${activeCallout === 'sensing' ? 'active' : ''}`}
+            onClick={() => setActiveCallout(activeCallout === 'sensing' ? null : 'sensing')}
+            title="Sensing Face"
+          >
+            <span className="node-marker">1</span>
+            <span className="node-tooltip">8mm Flush PEEK Sensing Face (Active Coil)</span>
+          </button>
+
+          <button
+            className={`callout-node node-threads ${activeCallout === 'threads' ? 'active' : ''}`}
+            onClick={() => setActiveCallout(activeCallout === 'threads' ? null : 'threads')}
+            title="Locknuts & Barrel"
+          >
+            <span className="node-marker">2</span>
+            <span className="node-tooltip">Dual M18 Brass Locknuts & Threaded Barrel</span>
+          </button>
+
+          <button
+            className={`callout-node node-led ${activeCallout === 'led' ? 'active' : ''}`}
+            onClick={() => setActiveCallout(activeCallout === 'led' ? null : 'led')}
+            title="360° Status LED"
+          >
+            <span className="node-marker">3</span>
+            <span className="node-tooltip">360° Amber Output Switching LED Window</span>
+          </button>
+
+          <button
+            className={`callout-node node-connector ${activeCallout === 'connector' ? 'active' : ''}`}
+            onClick={() => setActiveCallout(activeCallout === 'connector' ? null : 'connector')}
+            title="M12 DC Micro Connector"
+          >
+            <span className="node-marker">4</span>
+            <span className="node-tooltip">4-Pin M12 Gold Terminal Quick Disconnect</span>
+          </button>
+        </div>
+
+        <div className="three-view-presets-bar">
+          <button
+            type="button"
+            className={`preset-btn ${viewPreset === 'iso' ? 'active' : ''}`}
+            onClick={() => applyViewPreset('iso')}
+          >
+            Isometric
+          </button>
+          <button
+            type="button"
+            className={`preset-btn ${viewPreset === 'front' ? 'active' : ''}`}
+            onClick={() => applyViewPreset('front')}
+          >
+            Front Body
+          </button>
+          <button
+            type="button"
+            className={`preset-btn ${viewPreset === 'face' ? 'active' : ''}`}
+            onClick={() => applyViewPreset('face')}
+          >
+            Sensing Face
+          </button>
+          <button
+            type="button"
+            className={`preset-btn ${viewPreset === 'connector' ? 'active' : ''}`}
+            onClick={() => applyViewPreset('connector')}
+          >
+            M12 Pinout
+          </button>
+          <button
+            type="button"
+            className="preset-btn reset-btn"
+            onClick={resetCamera}
+            title="Reset Camera & Turntable"
+          >
+            <RefreshCw size={11} />
+          </button>
+        </div>
+
+        {targetDetected && (
+          <div className="three-detection-banner">
+            <Radio size={14} className="pulse-icon text-amber" />
+            <span>Target Present at 8.0mm • Switching PNP Output HIGH</span>
+          </div>
+        )}
       </div>
 
-      {/* Floating 3D Callouts */}
-      <div className="three-callout-overlay">
-        <button
-          className={`callout-node node-sensing ${activeCallout === 'sensing' ? 'active' : ''}`}
-          onClick={() => setActiveCallout(activeCallout === 'sensing' ? null : 'sensing')}
-          title="Sensing Face"
-        >
-          <span className="node-marker">1</span>
-          <span className="node-tooltip">8mm Shielded PEEK Sensing Face (Flush)</span>
-        </button>
-
-        <button
-          className={`callout-node node-threads ${activeCallout === 'threads' ? 'active' : ''}`}
-          onClick={() => setActiveCallout(activeCallout === 'threads' ? null : 'threads')}
-          title="Thread & Nuts"
-        >
-          <span className="node-marker">2</span>
-          <span className="node-tooltip">M18x1.0 Metric Thread & Dual Hex Locknuts</span>
-        </button>
-
-        <button
-          className={`callout-node node-led ${activeCallout === 'led' ? 'active' : ''}`}
-          onClick={() => setActiveCallout(activeCallout === 'led' ? null : 'led')}
-          title="LED Output Ring"
-        >
-          <span className="node-marker">3</span>
-          <span className="node-tooltip">360° Amber Output Switching LED Indicator</span>
-        </button>
-
-        <button
-          className={`callout-node node-connector ${activeCallout === 'connector' ? 'active' : ''}`}
-          onClick={() => setActiveCallout(activeCallout === 'connector' ? null : 'connector')}
-          title="M12 Connector"
-        >
-          <span className="node-marker">4</span>
-          <span className="node-tooltip">4-Pin M12 Micro DC Quick-Disconnect</span>
-        </button>
-      </div>
-
-      {/* Engineering Control Bar */}
       <div className="three-controls-bar">
         <button
           type="button"
           className={`control-btn ${autoRotate ? 'active' : ''}`}
           onClick={() => setAutoRotate(!autoRotate)}
-          title="Toggle Auto Rotation"
+          title="Toggle Turntable Rotation"
         >
-          <RotateCw size={14} />
-          <span>{autoRotate ? 'Rotating' : 'Paused'}</span>
+          <RotateCw size={14} className={autoRotate ? 'spin-slow' : ''} />
+          <span>{autoRotate ? 'Turntable Active' : 'Turntable Paused'}</span>
+        </button>
+
+        <button
+          type="button"
+          className={`control-btn ${exploded ? 'active' : ''}`}
+          onClick={() => setExploded(!exploded)}
+          title="Toggle Exploded Mechanical Assembly"
+        >
+          <Layers size={14} />
+          <span>{exploded ? 'Assembled' : 'Exploded Assembly'}</span>
         </button>
 
         <button
@@ -447,22 +717,22 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
 
         <button
           type="button"
-          className={`control-btn ${exploded ? 'active' : ''}`}
-          onClick={() => setExploded(!exploded)}
-          title="Toggle Exploded Mechanical Assembly"
+          className={`control-btn ${dimensionsVisible ? 'active' : ''}`}
+          onClick={() => setDimensionsVisible(!dimensionsVisible)}
+          title="Toggle CAD Caliper Dimension Lines"
         >
-          <Layers size={14} />
-          <span>{exploded ? 'Exploded (Active)' : 'Exploded View'}</span>
+          <Sliders size={14} />
+          <span>Dimensions</span>
         </button>
 
         <button
           type="button"
           className={`control-btn target-btn ${targetDetected ? 'triggered' : ''}`}
           onClick={() => setTargetDetected(!targetDetected)}
-          title="Simulate Steel Target Flag Entry at 8mm"
+          title="Simulate Steel Target Flag Detection"
         >
           <Zap size={14} />
-          <span>{targetDetected ? 'Target Detected (8.0mm)' : 'Simulate Target Flag'}</span>
+          <span>{targetDetected ? 'Flag Detected' : 'Simulate Target Flag'}</span>
         </button>
       </div>
 
@@ -470,9 +740,9 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
         <div className="three-viewer-footer-info">
           <div className="info-item">
             <ShieldCheck size={14} className="text-teal" />
-            <span>Dimensions: Ø18mm × 65mm body • Standard DIN EN 60947-5-2 compliant geometry</span>
+            <span>Dimensions: Ø18mm × 65mm Length • 4-Pin M12 Micro DC Quick-Disconnect</span>
           </div>
-          <span className="text-muted">Drag cursor to inspect angles</span>
+          <span className="text-muted-sm">Drag to inspect • Scroll to zoom</span>
         </div>
       )}
     </div>
