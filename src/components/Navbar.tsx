@@ -13,7 +13,9 @@ import {
   ArrowRight,
   Flame,
   Radio,
-  CheckCircle2
+  CheckCircle2,
+  LogOut,
+  Lock,
 } from 'lucide-react';
 import { DemoBadge } from './DemoBadge';
 
@@ -23,7 +25,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOpen }) => {
-  const { currentRoute, navigate, userRole, setUserRole, currentUser, requests } = useApp();
+  const { currentRoute, navigate, userRole, setUserRole, currentUser, requests, signOutFromSupabase } = useApp();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [navSearch, setNavSearch] = useState('');
 
@@ -152,6 +154,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
             </button>
           </div>
 
+          {/* Public Sign In Button */}
+          {isPublicPage && currentRoute !== '/login' && currentRoute !== '/signup' && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm hide-mobile"
+              onClick={() => navigate('/login')}
+            >
+              <Lock size={13} />
+              <span>Sign In</span>
+            </button>
+          )}
+
           {/* High-Impact Primary CTA Button */}
           {!isAdminPage && (
             <button
@@ -268,6 +282,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
                     <Building size={12} />
                     <span>Apex PackWorks • Plant B4</span>
                   </div>
+                  <button
+                    type="button"
+                    className="btn-signout mt-2"
+                    onClick={() => {
+                      setRoleDropdownOpen(false);
+                      signOutFromSupabase();
+                    }}
+                  >
+                    <LogOut size={13} />
+                    <span>Sign Out</span>
+                  </button>
                 </div>
               </div>
             )}

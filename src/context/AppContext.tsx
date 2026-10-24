@@ -27,6 +27,8 @@ import {
 import { INITIAL_GUARDRAILS, INITIAL_PAST_MISTAKES } from '../data/selfImprovingData';
 import { evaluateComponentGuardrails as evaluateGuardrailsUtil } from '../utils/selfImprovingEngine';
 import { createSearch, SearchCreateRequest } from '../api/searches';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { verifyBackendToken } from '../api/auth';
 
 export interface ToastMessage {
   id: string;
@@ -112,6 +114,20 @@ interface AppContextType {
   resetGuardrailsToDefault: () => void;
   evaluateCandidateGuardrails: (component: ComponentItem, machineId?: string) => GuardrailEvaluationResult;
   totalMistakesPrevented: number;
+  // Supabase Authentication
+  isAuthenticated: boolean;
+  authLoading: boolean;
+  supabaseUser: any | null;
+  supabaseSession: any | null;
+  isSupabaseLive: boolean;
+  signInWithSupabase: (email: string, password?: string) => Promise<{ error: string | null }>;
+  signUpWithSupabase: (
+    email: string,
+    password?: string,
+    metadata?: { name: string; role: 'engineer' | 'procurement' | 'admin'; plant_site?: string }
+  ) => Promise<{ error: string | null }>;
+  signOutFromSupabase: () => Promise<void>;
+  signInWithDemoPersona: (role: 'engineer' | 'procurement' | 'admin') => Promise<void>;
 }
 
 const defaultDraft: DraftRequestData = {
@@ -155,12 +171,212 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [userRole, setUserRole] = useState<'engineer' | 'procurement' | 'admin'>('engineer');
+  const [supabaseSession, setSupabaseSession] = useState<any | null>(null);
+  const [supabaseUser, setSupabaseUser] = useState<any | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const isSupabaseLive = isSupabaseConfigured();
+
+  const [customUser, setCustomUser] = useState<{
+    name: string;
+    email: string;
+    plantSite: string;
+  } | null>(null);
+
+  // Initialize and listen to Supabase auth state
+  useEffect(() => {
+    let mounted = true;
+
+    const initAuth = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (mounted && data?.session) {
+          setSupabaseSession(data.session);
+          setSupabaseUser(data.session.user);
+
+          // Verify token against backend
+          const backendVerify = await verifyBackendToken(data.session.access_token);
+          if (backendVerify.valid && backendVerify.user) {
+            setUserRole(backendVerify.user.role);
+            setCustomUser({
+              name: backendVerify.user.name,
+              email: backendVerify.user.email,
+              plantSite: backendVerify.user.plant_site,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error restoring Supabase session:', err);
+      } finally {
+        if (mounted) setAuthLoading(false);
+      }
+    };
+
+    initAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      setSupabaseSession(session);
+      setSupabaseUser(session?.user || null);
+
+      if (session) {
+        try {
+          const backendVerify = await verifyBackendToken(session.access_token);
+          if (backendVerify.valid && backendVerify.user) {
+            setUserRole(backendVerify.user.role);
+            setCustomUser({
+              name: backendVerify.user.name,
+              email: backendVerify.user.email,
+              plantSite: backendVerify.user.plant_site,
+            });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      } else {
+        setCustomUser(null);
+      }
+      setAuthLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   const currentUser = {
-    name: userRole === 'admin' ? 'Sarah Jenkins' : userRole === 'procurement' ? 'Elena Gomez' : 'Marcus Vance',
-    email: userRole === 'admin' ? 's.jenkins@apexpack.internal' : userRole === 'procurement' ? 'e.gomez@apexpack.internal' : 'm.vance@apexpack.internal',
+    name: customUser?.name || (userRole === 'admin' ? 'Sarah Jenkins' : userRole === 'procurement' ? 'Elena Gomez' : 'Marcus Vance'),
+    email: customUser?.email || (userRole === 'admin' ? 's.jenkins@apexpack.internal' : userRole === 'procurement' ? 'e.gomez@apexpack.internal' : 'm.vance@apexpack.internal'),
     roleTitle: userRole === 'admin' ? 'Enterprise Systems Administrator' : userRole === 'procurement' ? 'Senior Technical Procurement Lead' : 'Lead Reliability & Maintenance Engineer',
-    plantSite: 'Apex PackWorks - Main Plant (Facility B4)',
+    plantSite: customUser?.plantSite || 'Apex PackWorks - Main Plant (Facility B4)',
+  };
+
+  const signInWithSupabase = async (email: string, password?: string): Promise<{ error: string | null }> => {
+    try {
+      setAuthLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password || 'factory_password_123',
+      });
+
+      if (error) {
+        addToast('Sign In Failed', error.message, 'warning');
+        return { error: error.message };
+      }
+
+      if (data.session) {
+        setSupabaseSession(data.session);
+        setSupabaseUser(data.session.user);
+
+        // Verify with backend
+        const verification = await verifyBackendToken(data.session.access_token);
+        if (verification.valid && verification.user) {
+          setUserRole(verification.user.role);
+          setCustomUser({
+            name: verification.user.name,
+            email: verification.user.email,
+            plantSite: verification.user.plant_site,
+          });
+        }
+      }
+
+      addToast(
+        'Authenticated via Supabase',
+        `Welcome back! Session verified with backend for ${email}.`,
+        'success'
+      );
+      return { error: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Authentication failed';
+      addToast('Auth Error', msg, 'warning');
+      return { error: msg };
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const signUpWithSupabase = async (
+    email: string,
+    password?: string,
+    metadata?: { name: string; role: 'engineer' | 'procurement' | 'admin'; plant_site?: string }
+  ): Promise<{ error: string | null }> => {
+    try {
+      setAuthLoading(true);
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password || 'factory_password_123',
+        options: {
+          data: {
+            name: metadata?.name || email.split('@')[0],
+            role: metadata?.role || 'engineer',
+            plant_site: metadata?.plant_site || 'Apex PackWorks - Main Plant (Facility B4)',
+          },
+        },
+      });
+
+      if (error) {
+        addToast('Sign Up Failed', error.message, 'warning');
+        return { error: error.message };
+      }
+
+      if (data.session) {
+        setSupabaseSession(data.session);
+        setSupabaseUser(data.session.user);
+
+        // Verify with backend
+        const verification = await verifyBackendToken(data.session.access_token);
+        if (verification.valid && verification.user) {
+          setUserRole(verification.user.role);
+          setCustomUser({
+            name: verification.user.name,
+            email: verification.user.email,
+            plantSite: verification.user.plant_site,
+          });
+        }
+      }
+
+      addToast(
+        'Account Registered',
+        `Supabase engineering account created for ${email}.`,
+        'success'
+      );
+      return { error: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Registration failed';
+      addToast('Sign Up Error', msg, 'warning');
+      return { error: msg };
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const signOutFromSupabase = async () => {
+    try {
+      await supabase.auth.signOut();
+      setSupabaseSession(null);
+      setSupabaseUser(null);
+      setCustomUser(null);
+      addToast('Signed Out', 'You have been signed out from PartScout AI.', 'info');
+      navigate('/login');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const signInWithDemoPersona = async (role: 'engineer' | 'procurement' | 'admin') => {
+    const email = role === 'admin'
+      ? 's.jenkins@apexpack.internal'
+      : role === 'procurement'
+      ? 'e.gomez@apexpack.internal'
+      : 'm.vance@apexpack.internal';
+
+    await signInWithSupabase(email, 'prototype_pass_2026');
+    setUserRole(role);
+    if (role === 'admin') {
+      navigate('/admin/dashboard');
+    } else {
+      navigate('/app/dashboard');
+    }
   };
 
   // Saved parts in localStorage
@@ -586,6 +802,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetGuardrailsToDefault,
         evaluateCandidateGuardrails,
         totalMistakesPrevented,
+        isAuthenticated: Boolean(supabaseSession?.user || supabaseUser),
+        authLoading,
+        supabaseUser,
+        supabaseSession,
+        isSupabaseLive,
+        signInWithSupabase,
+        signUpWithSupabase,
+        signOutFromSupabase,
+        signInWithDemoPersona,
       }}
     >
       {children}

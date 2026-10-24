@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import searches
+from app.routes import searches, auth
 from app.schemas import HealthResponse
 
 app = FastAPI(
@@ -9,6 +9,7 @@ app = FastAPI(
 )
 
 app.include_router(searches.router)
+app.include_router(auth.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])

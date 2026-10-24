@@ -69,3 +69,31 @@ class ErrorResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+
+
+UserRole = Literal["engineer", "procurement", "admin"]
+
+
+class AuthUser(BaseModel):
+    id: str
+    email: str
+    name: str = "Plant Specialist"
+    role: UserRole = "engineer"
+    plant_site: str = "Apex PackWorks - Main Plant (Facility B4)"
+    created_at: str | None = None
+
+
+class TokenVerifyRequest(BaseModel):
+    access_token: str
+
+
+class TokenVerifyResponse(BaseModel):
+    valid: bool
+    user: AuthUser | None = None
+    message: str
+
+
+class AuthConfigResponse(BaseModel):
+    supabase_configured: bool
+    supabase_url: str | None = None
+    auth_modes: list[str] = ["email_password", "quick_demo_persona"]
