@@ -72,11 +72,12 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
-    // 2. Camera
+    // 2. Camera - centered framing with lookAt
     const width = container.clientWidth || 640;
-    const height = container.clientHeight || 440;
-    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-    camera.position.set(0, 5, 14);
+    const height = container.clientHeight || 480;
+    const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 100);
+    camera.position.set(0, 0.6, 15.5);
+    camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
     // 3. Renderer with high-end settings
@@ -121,7 +122,7 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
 
     // 5. Studio Pedestal / Ground Shadow Disc
     const groundGroup = new THREE.Group();
-    groundGroup.position.y = -3.4;
+    groundGroup.position.y = -3.8;
 
     const shadowPlateGeom = new THREE.CircleGeometry(4.5, 48);
     const shadowPlateMat = new THREE.MeshBasicMaterial({
@@ -140,10 +141,12 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
 
     scene.add(groundGroup);
 
-    // 6. Model Root Group
+    // 6. Model Root Group (centered vertically)
     const modelGroup = new THREE.Group();
-    modelGroup.rotation.z = Math.PI / 10;
+    modelGroup.position.set(0, 0.25, 0);
+    modelGroup.rotation.z = Math.PI / 12;
     modelGroup.rotation.y = -Math.PI / 4;
+    modelGroup.scale.set(0.9, 0.9, 0.9);
     scene.add(modelGroup);
     modelGroupRef.current = modelGroup;
 
@@ -549,28 +552,33 @@ export const ThreePartViewer: React.FC<ThreePartViewerProps> = ({
 
     switch (preset) {
       case 'iso':
-        modelGroupRef.current.rotation.set(0.35, -Math.PI / 4, 0);
-        cameraRef.current.position.set(0, 5, 14);
+        modelGroupRef.current.rotation.set(0.28, -Math.PI / 4, 0);
+        cameraRef.current.position.set(0, 0.6, 15.5);
+        cameraRef.current.lookAt(0, 0, 0);
         break;
       case 'front':
         modelGroupRef.current.rotation.set(0, 0, 0);
-        cameraRef.current.position.set(0, 0, 13);
+        cameraRef.current.position.set(0, 0.2, 14.5);
+        cameraRef.current.lookAt(0, 0, 0);
         break;
       case 'face':
         modelGroupRef.current.rotation.set(Math.PI / 2, 0, 0);
-        cameraRef.current.position.set(0, 0, 11);
+        cameraRef.current.position.set(0, 0, 12.5);
+        cameraRef.current.lookAt(0, 0, 0);
         break;
       case 'connector':
         modelGroupRef.current.rotation.set(-Math.PI / 2, 0, 0);
-        cameraRef.current.position.set(0, 0, 11);
+        cameraRef.current.position.set(0, 0, 12.5);
+        cameraRef.current.lookAt(0, 0, 0);
         break;
     }
   };
 
   const resetCamera = () => {
     if (!modelGroupRef.current || !cameraRef.current) return;
-    modelGroupRef.current.rotation.set(Math.PI / 10, -Math.PI / 4, 0);
-    cameraRef.current.position.set(0, 5, 14);
+    modelGroupRef.current.rotation.set(Math.PI / 12, -Math.PI / 4, 0);
+    cameraRef.current.position.set(0, 0.6, 15.5);
+    cameraRef.current.lookAt(0, 0, 0);
     setAutoRotate(true);
     setViewPreset('iso');
   };

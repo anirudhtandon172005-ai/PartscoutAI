@@ -1219,7 +1219,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .three-canvas-container {
   width: 100%;
-  height: 440px;
+  height: 460px;
   position: relative;
   cursor: grab;
 }
@@ -1228,7 +1228,7 @@ h1, h2, h3, h4, h5, h6 {
   cursor: grabbing;
 }
 
-/* Floating Hotspot Callouts */
+/* Floating Hotspot Callouts (Centered alignment) */
 .three-callout-overlay {
   position: absolute;
   inset: 0;
@@ -1246,10 +1246,10 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.5rem;
 }
 
-.callout-node.node-sensing { top: 28%; left: 36%; }
-.callout-node.node-threads { top: 50%; left: 45%; }
-.callout-node.node-led { top: 68%; left: 58%; }
-.callout-node.node-connector { top: 80%; left: 63%; }
+.callout-node.node-sensing { top: 22%; left: 38%; }
+.callout-node.node-threads { top: 45%; left: 45%; }
+.callout-node.node-led { top: 65%; left: 56%; }
+.callout-node.node-connector { top: 79%; left: 60%; }
 
 .node-marker {
   width: 26px;
@@ -1527,6 +1527,13 @@ h1, h2, h3, h4, h5, h6 {
   grid-template-columns: 1.18fr 0.82fr;
   gap: 3.5rem;
   align-items: center;
+}
+
+.hero-3d-anchor {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  align-self: center;
 }
 
 .hero-kicker {
