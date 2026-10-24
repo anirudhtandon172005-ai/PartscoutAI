@@ -140,7 +140,7 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
         </div>
 
         {/* Candidate Alternative Card */}
-        <div className="hero-part-card candidate-card">
+        <div className="hero-part-card hero-candidate-card">
           <div className="card-ribbon ribbon-teal">PROPOSED DROP-IN CANDIDATE</div>
           <div className="candidate-score-bar">
             <div className="score-badge-circle">

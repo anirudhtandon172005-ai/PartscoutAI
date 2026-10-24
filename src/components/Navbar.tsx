@@ -2,18 +2,18 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Search,
-  SlidersHorizontal,
-  Shield,
-  Layers,
-  ArrowRight,
-  ExternalLink,
+  Compass,
+  Cpu,
+  ShieldCheck,
   ChevronDown,
-  User,
   Building,
   Menu,
   X,
   PlusCircle,
-  HelpCircle,
+  ArrowRight,
+  Flame,
+  Radio,
+  CheckCircle2
 } from 'lucide-react';
 import { DemoBadge } from './DemoBadge';
 
@@ -25,16 +25,24 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOpen }) => {
   const { currentRoute, navigate, userRole, setUserRole, currentUser, requests } = useApp();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [navSearch, setNavSearch] = useState('');
 
   const isPublicPage = currentRoute === '/' || currentRoute === '/login' || currentRoute === '/signup';
   const isAdminPage = currentRoute.startsWith('/admin');
 
   const activeRequest = requests[0]; // Line 4 proximity sensor request
 
+  const handleNavSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (navSearch.trim().length > 0) {
+      navigate('/app/results/req-line4-sensor');
+    }
+  };
+
   return (
     <header className="app-navbar">
       <div className="navbar-inner">
-        {/* Left: Mobile hamburger & Brand */}
+        {/* Left: Mobile hamburger & Brand Logo */}
         <div className="navbar-left">
           {!isPublicPage && (
             <button
@@ -55,10 +63,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
             title="Go to PartScout AI Home"
           >
             <div className="brand-logo-mark">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <rect x="3" y="3" width="18" height="18" rx="3" strokeWidth="2" stroke="#D9531E" />
-                <circle cx="12" cy="12" r="5" strokeWidth="2" stroke="#117A65" />
-                <path d="M12 2v3M12 19v3M2 12h3M19 12h3" strokeWidth="2" stroke="#D9531E" strokeLinecap="round" />
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <rect x="3" y="3" width="18" height="18" rx="4" strokeWidth="2" stroke="#EA580C" />
+                <circle cx="12" cy="12" r="5" strokeWidth="2" stroke="#0D9488" />
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3" strokeWidth="2" stroke="#EA580C" strokeLinecap="round" />
               </svg>
             </div>
             <div className="brand-text">
@@ -68,62 +76,87 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
           </div>
 
           {isPublicPage && (
-            <div className="navbar-badge-slot">
-              <DemoBadge variant="inline" customText="Prototype Mode" lastChecked="Live Mock" />
+            <div className="navbar-badge-slot hide-mobile">
+              <span className="nav-prototype-pill">
+                <span className="dot pulse"></span>
+                <span>PROTOTYPE SANDBOX</span>
+              </span>
             </div>
           )}
         </div>
 
-        {/* Center: Context Breadcrumb or Active Investigation Quick Access */}
-        {!isPublicPage && activeRequest && (
-          <div className="navbar-center-investigation hide-mobile">
-            <span className="investigation-label">Active Investigation:</span>
-            <button
-              type="button"
-              className="investigation-pill"
-              onClick={() => navigate(`/app/results/${activeRequest.id}`)}
-              title="Click to view search results for current part"
-            >
-              <span className="req-num tech-font">{activeRequest.requestNumber}</span>
-              <span className="req-part">{activeRequest.originalPartNumber}</span>
-              <span className="req-status-tag">{activeRequest.status}</span>
-              <ArrowRight size={13} className="pill-arrow" />
-            </button>
+        {/* Center: Quick Omni-Search or Active Investigation Pill */}
+        {!isPublicPage ? (
+          <div className="navbar-center-slot hide-mobile">
+            {activeRequest ? (
+              <button
+                type="button"
+                className="investigation-pill"
+                onClick={() => navigate(`/app/results/${activeRequest.id}`)}
+                title="Click to view search results for current part"
+              >
+                <span className="investigation-dot pulse-red"></span>
+                <span className="investigation-label">Line-Down Alert:</span>
+                <span className="req-part">{activeRequest.originalPartNumber}</span>
+                <span className="req-line-badge">Line 4 Capper</span>
+                <ArrowRight size={13} className="pill-arrow" />
+              </button>
+            ) : (
+              <form className="nav-quick-search-form" onSubmit={handleNavSearch}>
+                <Search size={14} className="search-icon-nav" />
+                <input
+                  type="text"
+                  placeholder="Quick search 500,000+ parts..."
+                  value={navSearch}
+                  onChange={(e) => setNavSearch(e.target.value)}
+                />
+              </form>
+            )}
+          </div>
+        ) : (
+          <div className="navbar-center-slot hide-tablet">
+            <div className="public-nav-status">
+              <span className="status-live-dot"></span>
+              <span>14,800+ Catalog Feeds Connected • Verified Datasheets</span>
+            </div>
           </div>
         )}
 
-        {/* Right: Actions, Role Selector & Navigation Mode */}
+        {/* Right: Modern Mode Segmented Switcher, CTA, & Persona Avatar */}
         <div className="navbar-right">
-          {/* Quick links between Public / App / Admin */}
-          <div className="nav-mode-switch hide-mobile">
+          {/* Polished Segmented Mode Switcher */}
+          <div className="nav-segmented-control hide-mobile">
             <button
               type="button"
-              className={`mode-btn ${isPublicPage ? 'active' : ''}`}
+              className={`segmented-btn ${isPublicPage ? 'active' : ''}`}
               onClick={() => navigate('/')}
             >
-              Public Tour
+              <Compass size={14} />
+              <span>Public Tour</span>
             </button>
             <button
               type="button"
-              className={`mode-btn ${!isPublicPage && !isAdminPage ? 'active' : ''}`}
+              className={`segmented-btn ${!isPublicPage && !isAdminPage ? 'active' : ''}`}
               onClick={() => navigate('/app/dashboard')}
             >
-              Engineer Workspace
+              <Cpu size={14} />
+              <span>Engineer Suite</span>
             </button>
             <button
               type="button"
-              className={`mode-btn ${isAdminPage ? 'active' : ''}`}
+              className={`segmented-btn ${isAdminPage ? 'active' : ''}`}
               onClick={() => navigate('/admin/dashboard')}
             >
-              Admin Suite
+              <ShieldCheck size={14} />
+              <span>Admin Suite</span>
             </button>
           </div>
 
-          {/* Primary Action Button */}
+          {/* High-Impact Primary CTA Button */}
           {!isAdminPage && (
             <button
               type="button"
-              className="btn btn-primary btn-sm new-search-btn"
+              className="btn btn-primary btn-sm nav-cta-btn"
               onClick={() => navigate('/app/requests/new/machine')}
             >
               <PlusCircle size={15} />
@@ -131,7 +164,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
             </button>
           )}
 
-          {/* User Role Switcher Dropdown */}
+          {/* User Persona Dropdown */}
           <div className="user-role-dropdown-container">
             <button
               type="button"
@@ -139,20 +172,32 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
               onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
               aria-label="Switch User Role Persona"
             >
-              <div className="role-avatar">
-                {userRole === 'admin' ? 'SJ' : userRole === 'procurement' ? 'EG' : 'MV'}
+              <div className="role-avatar-wrapper">
+                <div className="role-avatar">
+                  {userRole === 'admin' ? 'SJ' : userRole === 'procurement' ? 'EG' : 'MV'}
+                </div>
+                <span className="role-status-dot"></span>
               </div>
               <div className="role-meta hide-tablet">
                 <span className="user-name">{currentUser.name}</span>
-                <span className="role-name">{userRole === 'admin' ? 'Admin' : userRole === 'procurement' ? 'Procurement' : 'Maintenance Lead'}</span>
+                <span className="role-name">
+                  {userRole === 'admin'
+                    ? 'Admin'
+                    : userRole === 'procurement'
+                    ? 'Procurement'
+                    : 'Maintenance Lead'}
+                </span>
               </div>
               <ChevronDown size={14} className="dropdown-caret" />
             </button>
 
             {roleDropdownOpen && (
-              <div className="role-menu-popover" onMouseLeave={() => setRoleDropdownOpen(false)}>
+              <div
+                className="role-menu-popover"
+                onMouseLeave={() => setRoleDropdownOpen(false)}
+              >
                 <div className="role-menu-header">
-                  <span className="menu-header-label">Switch Persona (Prototype Sandbox)</span>
+                  <span className="menu-header-label">Switch Persona Sandbox</span>
                 </div>
 
                 <button
@@ -165,11 +210,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
                   }}
                 >
                   <div className="role-option-info">
-                    <strong>Marcus Vance</strong>
-                    <span>Lead Maintenance Engineer</span>
+                    <div className="option-title-row">
+                      <strong>Marcus Vance</strong>
+                      {userRole === 'engineer' && (
+                        <span className="active-pill">Active</span>
+                      )}
+                    </div>
+                    <span className="option-sub">Lead Maintenance Engineer</span>
                     <small>Focus: Specifications, Fit & Tolerances, Line Down response</small>
                   </div>
-                  {userRole === 'engineer' && <span className="active-dot"></span>}
                 </button>
 
                 <button
@@ -182,11 +231,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
                   }}
                 >
                   <div className="role-option-info">
-                    <strong>Elena Gomez</strong>
-                    <span>Senior Technical Procurement Lead</span>
+                    <div className="option-title-row">
+                      <strong>Elena Gomez</strong>
+                      {userRole === 'procurement' && (
+                        <span className="active-pill">Active</span>
+                      )}
+                    </div>
+                    <span className="option-sub">Senior Technical Procurement Lead</span>
                     <small>Focus: Supplier directory, RFQs, Pricing, Lead-time tradeoffs</small>
                   </div>
-                  {userRole === 'procurement' && <span className="active-dot"></span>}
                 </button>
 
                 <button
@@ -199,11 +252,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
                   }}
                 >
                   <div className="role-option-info">
-                    <strong>Sarah Jenkins</strong>
-                    <span>Enterprise System Administrator</span>
+                    <div className="option-title-row">
+                      <strong>Sarah Jenkins</strong>
+                      {userRole === 'admin' && (
+                        <span className="active-pill">Active</span>
+                      )}
+                    </div>
+                    <span className="option-sub">Enterprise System Administrator</span>
                     <small>Focus: Source domains, crawler jobs, data quality, API settings</small>
                   </div>
-                  {userRole === 'admin' && <span className="active-dot"></span>}
                 </button>
 
                 <div className="role-menu-footer">
