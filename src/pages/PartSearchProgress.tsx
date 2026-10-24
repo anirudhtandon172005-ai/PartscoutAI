@@ -16,7 +16,9 @@ import {
   RotateCcw,
   Clock,
   ExternalLink,
+  Search,
 } from 'lucide-react';
+import { getSearch, getCandidates, SearchStatusResponse } from '../api/searches';
 
 interface Stage {
   id: number;
@@ -27,15 +29,19 @@ interface Stage {
   metric: string;
 }
 
-export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId = 'req-2026-line4-sensor' }) => {
-  const { navigate, requests, sourceDomains, addToast } = useApp();
+export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId }) => {
+  const { navigate, requests, addToast } = useApp();
 
-  const currentReq = requests.find((r) => r.id === requestId) || requests[0];
+  const currentReq = requestId ? requests.find((r) => r.id === requestId) : null;
 
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [simulatedError, setSimulatedError] = useState(false);
+  const [searchStatus, setSearchStatus] = useState<SearchStatusResponse | null>(null);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [isPolling, setIsPolling] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const initialStages: Stage[] = [
     {
@@ -90,52 +96,102 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
 
   const [stages, setStages] = useState<Stage[]>(initialStages);
 
-  // Simulation timer
+  // Poll backend for search status
   useEffect(() => {
-    if (isPaused || simulatedError) return;
+    if (!requestId) return;
 
-    if (currentStageIndex >= stages.length) {
-      return; // completed
-    }
+    let isMounted = true;
 
-    const stageTimer = setTimeout(() => {
-      // Mark current stage completed
-      setStages((prev) =>
-        prev.map((s, idx) => {
-          if (idx < currentStageIndex) return { ...s, status: 'completed' };
-          if (idx === currentStageIndex) return { ...s, status: 'running' };
-          return { ...s, status: 'pending' };
-        })
-      );
+    const pollSearch = async () => {
+      try {
+        const status = await getSearch(requestId);
+        if (!isMounted) return;
 
-      // Add log
-      const logMessages = [
-        `[0.4s] [DISCOVERY] Resolved targeted catalog registry: balluff.com, ifm.com, turck.us, pepperl-fuchs.com, mcmaster.com, radwell.com, digikey.com.`,
-        `[1.2s] [FETCH] Retrieved product datasheets & DOM content for BES 516, IGT205, Bi8U-M18, NBB8, IME18 (HTTP 200 OK).`,
-        `[2.1s] [EXTRACT] Extracted 48 raw technical parameters and 7 real-time supplier offers across 4 geographic hubs.`,
-        `[3.0s] [NORMALIZE] Standardized attributes to IEC 60947-5-2: Thread M18x1.0, Sn 8.0mm, DC 3-wire PNP Normally Open.`,
-        `[3.8s] [COMPARE] Evaluated candidate matrix: ifm IGT205 (96% drop-in), Turck Bi8U (92% equivalent), P+F NBB8 (88% mounting review).`,
-        `[4.5s] [EVIDENCE] Compiled 4 primary PDF citations with retrieval timestamps and verified audit excerpts.`,
-      ];
+        setSearchStatus(status);
 
-      setLogs((prev) => [...prev, logMessages[currentStageIndex]]);
+        // Update stages based on backend status
+        if (status.status === 'completed') {
+          setStages((prev) => prev.map((s) => ({ ...s, status: 'completed' })));
+          setCurrentStageIndex(stages.length);
+          setIsPolling(false);
 
-      // Move to next stage
-      if (currentStageIndex + 1 <= stages.length) {
-        setCurrentStageIndex((prev) => prev + 1);
+          // Fetch candidates
+          try {
+            const candidatesResponse = await getCandidates(requestId);
+            if (isMounted) {
+              setCandidates(candidatesResponse.items);
+            }
+          } catch (err) {
+            console.error('Failed to fetch candidates:', err);
+          }
+
+          addToast('Research Completed', 'Candidate replacements found.', 'success');
+        } else if (status.status === 'failed') {
+          setStages((prev) => prev.map((s, idx) => idx === currentStageIndex ? { ...s, status: 'error' } : s));
+          setIsPolling(false);
+          setError(status.error || 'Search failed');
+          addToast('Search Failed', status.error || 'Unknown error', 'warning');
+        } else if (status.status === 'running' || status.status === 'queued') {
+          // Animate stages progressively
+          const nextStage = Math.min(currentStageIndex + 1, stages.length - 1);
+          if (nextStage > currentStageIndex) {
+            setCurrentStageIndex(nextStage);
+            setStages((prev) =>
+              prev.map((s, idx) => {
+                if (idx < nextStage) return { ...s, status: 'completed' };
+                if (idx === nextStage) return { ...s, status: 'running' };
+                return { ...s, status: 'pending' };
+              })
+            );
+            const logMessages = [
+              `[0.4s] [DISCOVERY] Resolved targeted catalog registry: balluff.com, ifm.com, turck.us, pepperl-fuchs.com, mcmaster.com, radwell.com, digikey.com.`,
+              `[1.2s] [FETCH] Retrieved product datasheets & DOM content for BES 516, IGT205, Bi8U-M18, NBB8, IME18 (HTTP 200 OK).`,
+              `[2.1s] [EXTRACT] Extracted 48 raw technical parameters and 7 real-time supplier offers across 4 geographic hubs.`,
+              `[3.0s] [NORMALIZE] Standardized attributes to IEC 60947-5-2: Thread M18x1.0, Sn 8.0mm, DC 3-wire PNP Normally Open.`,
+              `[3.8s] [COMPARE] Evaluated candidate matrix: ifm IGT205 (96% drop-in), Turck Bi8U (92% equivalent), P+F NBB8 (88% mounting review).`,
+              `[4.5s] [EVIDENCE] Compiled 4 primary PDF citations with retrieval timestamps and verified audit excerpts.`,
+            ];
+            if (nextStage <= logMessages.length) {
+              setLogs((prev) => [...prev, logMessages[nextStage - 1]]);
+            }
+          }
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('Polling error:', err);
+        setError(err instanceof Error ? err.message : 'Polling failed');
+        setIsPolling(false);
       }
-    }, 900);
+    };
 
-    return () => clearTimeout(stageTimer);
-  }, [currentStageIndex, isPaused, simulatedError]);
+    // Initial poll
+    pollSearch();
 
-  const isComplete = currentStageIndex >= stages.length;
+    // Poll every 1 second while running/queued
+    const interval = setInterval(() => {
+      if (isPolling && searchStatus?.status !== 'completed' && searchStatus?.status !== 'failed') {
+        pollSearch();
+      }
+    }, 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [requestId, currentStageIndex, isPolling, searchStatus?.status]);
+
+  const isComplete = searchStatus?.status === 'completed';
+  const isFailed = searchStatus?.status === 'failed';
 
   const handleReset = () => {
     setCurrentStageIndex(0);
     setLogs([]);
     setSimulatedError(false);
     setStages(initialStages);
+    setSearchStatus(null);
+    setCandidates([]);
+    setIsPolling(true);
+    setError(null);
   };
 
   const handleToggleError = () => {
@@ -165,10 +221,10 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
             <span className="dot pulse"></span> SEARCH EXECUTION PIPELINE
           </span>
           <h1 className="search-progress-title">
-            Researching Cross-References for {currentReq.originalPartNumber}
+            Researching Cross-References for {currentReq?.originalPartNumber || 'Loading...'}
           </h1>
           <p className="search-progress-sub">
-            Target Part: <strong>{currentReq.partName}</strong> • Facility Machine: {currentReq.machineName}
+            Target Part: <strong>{currentReq?.partName || 'Loading...'}</strong> • Facility Machine: {currentReq?.machineName || 'Loading...'}
           </p>
         </div>
 
@@ -207,7 +263,8 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
           <button
             type="button"
             className="btn btn-primary btn-sm shadow-lift"
-            onClick={() => navigate(`/app/results/${currentReq.id}`)}
+            onClick={() => currentReq && navigate(`/app/results/${currentReq.id}`)}
+            disabled={!isComplete}
           >
             <span>{isComplete ? 'View Search Results' : 'Skip Directly to Results'}</span>
             <ArrowRight size={14} />
@@ -219,8 +276,8 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
       <div className="progress-metric-strip">
         <div className="metric-col">
           <span className="strip-lbl">Research Status</span>
-          <strong className={`strip-val ${isComplete ? 'text-teal' : 'text-orange'}`}>
-            {simulatedError ? 'Warning: Backoff Retrying' : isComplete ? 'Research Completed' : 'Crawl in Progress...'}
+          <strong className={`strip-val ${isComplete ? 'text-teal' : isFailed ? 'text-red' : 'text-orange'}`}>
+            {isFailed ? 'Failed' : isComplete ? 'Research Completed' : searchStatus?.status === 'running' ? 'Crawl in Progress...' : searchStatus?.status === 'queued' ? 'Queued...' : 'Initializing...'}
           </strong>
         </div>
 
@@ -231,7 +288,7 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
 
         <div className="metric-col">
           <span className="strip-lbl">Identified Candidates</span>
-          <strong className="strip-val tech-font text-teal">4 Equivalents Found</strong>
+          <strong className="strip-val tech-font text-teal">{candidates.length > 0 ? `${candidates.length} Equivalents Found` : searchStatus?.candidate_count ? `${searchStatus.candidate_count} Equivalents Found` : 'Searching...'}</strong>
         </div>
 
         <div className="metric-col">
@@ -246,12 +303,12 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
         <div className="stages-list">
           {stages.map((stage, idx) => {
             const isStageDone = idx < currentStageIndex || isComplete;
-            const isStageActive = idx === currentStageIndex && !isComplete;
+            const isStageActive = idx === currentStageIndex && !isComplete && !isFailed;
 
             return (
               <div
                 key={stage.id}
-                className={`stage-card ${isStageDone ? 'completed' : isStageActive ? 'running' : 'pending'}`}
+                className={`stage-card ${isStageDone ? 'completed' : isStageActive ? 'running' : isFailed && idx >= currentStageIndex ? 'error' : 'pending'}`}
               >
                 <div className="stage-status-col">
                   {isStageDone ? (
@@ -261,6 +318,10 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
                   ) : isStageActive ? (
                     <div className="stage-spinner-icon">
                       <span className="spinner-dot"></span>
+                    </div>
+                  ) : isFailed && idx >= currentStageIndex ? (
+                    <div className="stage-error-icon">
+                      <AlertTriangle size={18} className="text-red" />
                     </div>
                   ) : (
                     <div className="stage-pending-icon">{stage.id}</div>
@@ -288,19 +349,19 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
             <span>Targeted Crawler Standard Output (Demo Stream)</span>
           </div>
           <span className="terminal-status tech-font">
-            {isPaused ? 'STREAM PAUSED' : isComplete ? 'PIPELINE DONE' : 'STREAMING LIVE'}
+            {isPaused ? 'STREAM PAUSED' : isComplete ? 'PIPELINE DONE' : isFailed ? 'FAILED' : 'STREAMING LIVE'}
           </span>
         </div>
 
         <div className="terminal-body tech-font">
           {logs.map((log, index) => (
             <div key={index} className="log-line">
-              <span className="log-bullet">&gt;</span>
+              <span className="log-bullet">{'>'}</span>
               <span>{log}</span>
             </div>
           ))}
           {logs.length === 0 && <div className="text-muted">Initializing crawler worker queue...</div>}
-          {!isComplete && !isPaused && !simulatedError && (
+          {!isComplete && !isPaused && !simulatedError && !isFailed && (
             <div className="log-line text-teal">
               <span className="cursor-blink">▋</span>
             </div>
@@ -309,24 +370,43 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
       </div>
 
       {/* Completed State Handoff CTA */}
-      {isComplete && (
+      {(isComplete || candidates.length > 0) && (
         <div className="completed-handoff-banner">
           <div className="handoff-content">
             <CheckCircle2 size={24} className="text-teal" />
             <div>
               <h3 className="handoff-title">Part Intelligence Ready for Engineering Review</h3>
               <p className="handoff-desc">
-                4 viable candidate replacements have been extracted and compared against Line 4 constraints.
+                {candidates.length > 0 ? `${candidates.length} viable candidate replacements have been extracted and compared against Line 4 constraints.` : 'Candidate replacements have been extracted and compared against constraints.'}
               </p>
             </div>
           </div>
           <button
             type="button"
             className="btn btn-primary btn-lg shadow-lift"
-            onClick={() => navigate(`/app/results/${currentReq.id}`)}
+            onClick={() => currentReq && navigate(`/app/results/${currentReq.id}`)}
           >
-            <span>Review 4 Candidate Replacements</span>
+            <span>Review {candidates.length > 0 ? candidates.length : 'Candidate'} Replacements</span>
             <ArrowRight size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Error State */}
+      {isFailed && (
+        <div className="error-banner">
+          <AlertTriangle size={24} className="text-red" />
+          <div>
+            <h3 className="handoff-title">Search Failed</h3>
+            <p className="handoff-desc">{error || searchStatus?.error || 'An unknown error occurred'}</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline btn-lg"
+            onClick={handleReset}
+          >
+            <RotateCcw size={16} />
+            <span>Retry Search</span>
           </button>
         </div>
       )}

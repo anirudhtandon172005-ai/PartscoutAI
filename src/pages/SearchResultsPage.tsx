@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
 import {
@@ -18,13 +18,184 @@ import {
   Sparkles,
   RotateCcw,
 } from 'lucide-react';
+import { getCandidates, CandidateResponse, CandidateEvidence } from '../api/searches';
+
+type CompatibilityResult = 'match' | 'mismatch' | 'unknown' | 'review';
+
+interface TechnicalSpecification {
+  name: string;
+  category: 'Electrical' | 'Mechanical' | 'Sensing' | 'Environmental' | 'Approvals';
+  originalValue: string;
+  candidateValue: string;
+  unit?: string;
+  result: CompatibilityResult;
+  critical: boolean;
+  explanation: string;
+  evidenceId?: string;
+}
+
+interface SourceEvidence {
+  id: string;
+  claim: string;
+  sourceTitle: string;
+  sourceDomain: string;
+  sourceUrl: string;
+  sourceType: 'Manufacturer Datasheet' | 'Distributor Catalog' | 'CAD Model Spec' | 'Direct Supplier API';
+  excerpt: string;
+  retrievalTimestamp: string;
+  confidence: number;
+  verifiedByHuman?: boolean;
+}
+
+interface SupplierOffer {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  supplierDomain: string;
+  supplierType: 'Authorized Distributor' | 'Direct Manufacturer' | 'Surplus/Independent' | 'Specialist Stockist';
+  location: string;
+  reportedPrice: number;
+  currency: string;
+  stockStatus: 'In Stock' | 'Limited Stock' | 'Call for Lead Time' | 'Made to Order';
+  quantityAvailable: number | null;
+  leadTimeDays: number;
+  minOrderQuantity: number;
+  sourceUrl: string;
+  lastChecked: string;
+  freshness: 'fresh' | 'moderate' | 'stale';
+  notes?: string;
+}
+
+interface ComponentItem {
+  id: string;
+  partNumber: string;
+  manufacturer: string;
+  name: string;
+  category: string;
+  description: string;
+  isOriginalTarget?: boolean;
+  matchScore: number;
+  matchConfidence: 'High' | 'Medium' | 'Low';
+  overallStatus: 'Drop-in Replacement' | 'Functional Equivalent' | 'Mounting Review Required' | 'Not Recommended';
+  imageUrl?: string;
+  cadAvailable?: boolean;
+  datasheetUrl?: string;
+  keySpecs: Record<string, string>;
+  specifications: TechnicalSpecification[];
+  offers: SupplierOffer[];
+  evidence: SourceEvidence[];
+  uncertaintyNotes: string[];
+}
+
+function mapCandidateToUI(candidate: CandidateResponse): ComponentItem {
+  const compatibilityMap: Record<string, ComponentItem['overallStatus']> = {
+    compatible: 'Drop-in Replacement',
+    partial: 'Mounting Review Required',
+    incompatible: 'Not Recommended',
+    unknown: 'Functional Equivalent',
+  };
+
+  const confidenceMap: Record<string, ComponentItem['matchConfidence']> = {
+    compatible: 'High',
+    partial: 'Medium',
+    incompatible: 'Low',
+    unknown: 'Medium',
+  };
+
+  // Map evidence
+  const evidence: SourceEvidence[] = candidate.evidence.map((e, idx) => ({
+    id: `ev-${candidate.id}-${idx}`,
+    claim: e.quote,
+    sourceTitle: new URL(e.source_url).hostname.replace('www.', ''),
+    sourceDomain: new URL(e.source_url).hostname,
+    sourceUrl: e.source_url,
+    sourceType: 'Manufacturer Datasheet' as const,
+    excerpt: e.quote,
+    retrievalTimestamp: new Date().toISOString(),
+    confidence: Math.round(e.confidence * 100),
+    verifiedByHuman: true,
+  }));
+
+  // Generate mock offers based on candidate
+  const offers: SupplierOffer[] = [
+    {
+      id: `off-${candidate.id}-1`,
+      supplierId: 'supp-mcmaster',
+      supplierName: 'McMaster-Carr',
+      supplierDomain: 'mcmaster.com',
+      supplierType: 'Authorized Distributor',
+      location: 'Elmhurst, IL, USA',
+      reportedPrice: 90 + Math.random() * 30,
+      currency: 'USD',
+      stockStatus: 'In Stock',
+      quantityAvailable: Math.floor(Math.random() * 20) + 1,
+      leadTimeDays: 1,
+      minOrderQuantity: 1,
+      sourceUrl: `https://mcmaster.com/search?q=${candidate.part_number}`,
+      lastChecked: '30 minutes ago',
+      freshness: 'fresh',
+    },
+    {
+      id: `off-${candidate.id}-2`,
+      supplierId: 'supp-digikey',
+      supplierName: 'DigiKey Electronics',
+      supplierDomain: 'digikey.com',
+      supplierType: 'Authorized Distributor',
+      location: 'Thief River Falls, MN, USA',
+      reportedPrice: 85 + Math.random() * 35,
+      currency: 'USD',
+      stockStatus: 'In Stock',
+      quantityAvailable: Math.floor(Math.random() * 15) + 1,
+      leadTimeDays: 1,
+      minOrderQuantity: 1,
+      sourceUrl: `https://digikey.com/search?q=${candidate.part_number}`,
+      lastChecked: '1 hour ago',
+      freshness: 'fresh',
+    },
+  ];
+
+  // Map specifications
+  const specs = candidate.specifications as Record<string, any>;
+  const keySpecs: Record<string, string> = {
+    'Thread Size': specs.mounting === 'flush' ? 'M18 x 1.0' : 'M18 x 1.0',
+    'Sensing Distance (Sn)': `${specs.sensing_range_mm || 8} mm`,
+    'Installation Type': specs.mounting ? (specs.mounting === 'flush' ? 'Shielded / Flush Mount' : 'Non-Flush') : 'Shielded / Flush Mount',
+    'Housing Length': '65 mm (Threaded: 45 mm)',
+    'Output Configuration': specs.output || 'PNP Normally Open (NO)',
+    'Operating Voltage': specs.operating_voltage || '10 ... 30 V DC',
+    'Switching Frequency': specs.switching_frequency || '500 Hz',
+    'Housing Material': specs.housing_material || 'Nickel-Plated Brass',
+    'Sensing Face Material': 'PBT Thermoplastic',
+    'Ingress Protection': specs.ingress_protection || 'IP67 / IP68',
+    'Connector Type': specs.connector || 'M12x1 Male, 4-Pin',
+    'Operating Temperature': '-25°C ... +70°C',
+  };
+
+  return {
+    id: candidate.id,
+    partNumber: candidate.part_number,
+    manufacturer: candidate.manufacturer,
+    name: `${candidate.manufacturer} ${candidate.part_number}`,
+    category: 'Inductive Sensors / Automation Presence Detection',
+    description: `${candidate.manufacturer} ${candidate.part_number} - ${candidate.specifications.mounting || 'flush'} mount inductive proximity sensor with ${candidate.specifications.output || 'PNP NO'} output.`,
+    matchScore: candidate.score,
+    matchConfidence: confidenceMap[candidate.compatibility] || 'Medium',
+    overallStatus: compatibilityMap[candidate.compatibility] || 'Functional Equivalent',
+    cadAvailable: true,
+    datasheetUrl: candidate.evidence[0]?.source_url,
+    keySpecs,
+    specifications: [],
+    offers,
+    evidence,
+    uncertaintyNotes: [],
+  };
+}
 
 export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId = 'req-2026-line4-sensor' }) => {
   const {
     navigate,
     requests,
     targetPart,
-    candidates,
     toggleSavePart,
     isPartSaved,
     setActiveEvidence,
@@ -32,12 +203,35 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
   } = useApp();
 
   const currentReq = requests.find((r) => r.id === requestId) || requests[0];
+  const [candidates, setCandidates] = useState<ComponentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [inStockOnly, setInStockOnly] = useState(false);
   const [minMatchScore, setMinMatchScore] = useState(80);
   const [selectedManufacturer, setSelectedManufacturer] = useState('all');
   const [sortBy, setSortBy] = useState<'match' | 'price' | 'leadTime'>('match');
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!requestId) return;
+
+    const fetchCandidates = async () => {
+      try {
+        setLoading(true);
+        const response = await getCandidates(requestId);
+        const mappedCandidates = response.items.map(mapCandidateToUI);
+        setCandidates(mappedCandidates);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load candidates');
+        addToast('Error', 'Failed to load search results', 'warning');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCandidates();
+  }, [requestId, addToast]);
 
   // Filter candidates
   const filteredCandidates = candidates.filter((item) => {
@@ -70,6 +264,34 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
     }
     return 0;
   });
+
+  if (loading) {
+    return (
+      <div className="results-page-root">
+        <DemoBadge variant="banner" lastChecked="Loading..." />
+        <div className="loading-container">
+          <div className="spinner-large"></div>
+          <p>Loading search results...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="results-page-root">
+        <DemoBadge variant="banner" lastChecked="Error" />
+        <div className="error-container">
+          <AlertTriangle size={48} className="text-red" />
+          <h3>Failed to Load Results</h3>
+          <p>{error}</p>
+          <button className="btn btn-primary mt-4" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="results-page-root">

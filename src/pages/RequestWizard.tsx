@@ -60,9 +60,14 @@ export const RequestWizard: React.FC<RequestWizardProps> = ({ step }) => {
     navigate('/app/requests/new/review');
   };
 
-  const handleFinalSubmit = () => {
-    const newRequestId = submitDraftRequest();
-    navigate(`/app/search/${newRequestId}`);
+  const handleFinalSubmit = async () => {
+    try {
+      const newRequestId = await submitDraftRequest();
+      navigate(`/app/search/${newRequestId}`);
+    } catch (error) {
+      // Error toast already shown in submitDraftRequest
+      console.error('Failed to submit draft request:', error);
+    }
   };
 
   const loadScenarioPrefill = () => {

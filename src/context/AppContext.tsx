@@ -21,6 +21,7 @@ import {
   MOCK_COLLECTION_JOBS,
   MOCK_QUALITY_ISSUES,
 } from '../data/mockData';
+import { createSearch, SearchCreateRequest } from '../api/searches';
 
 export interface ToastMessage {
   id: string;
@@ -70,7 +71,7 @@ interface AppContextType {
   draftRequest: DraftRequestData;
   updateDraftRequest: (updates: Partial<DraftRequestData>) => void;
   resetDraftRequest: () => void;
-  submitDraftRequest: () => string; // returns new request ID
+  submitDraftRequest: () => Promise<string>; // returns new search ID
   addRequestNote: (requestId: string, text: string) => void;
   updateRequestStatus: (requestId: string, status: PartRequest['status']) => void;
   addQuotation: (quote: Omit<Quotation, 'id' | 'rfqNumber' | 'quotedAt'>) => void;
@@ -226,42 +227,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('partscout_active_draft');
   };
 
-  const submitDraftRequest = () => {
+  const submitDraftRequest = async () => {
     const selectedMachine = MOCK_MACHINES.find((m) => m.id === draftRequest.machineId);
-    const newId = `req-${Date.now()}`;
-    const newReqNumber = `REQ-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newReq: PartRequest = {
-      id: newId,
-      requestNumber: newReqNumber,
-      machineId: draftRequest.machineId,
-      machineName: selectedMachine ? `${selectedMachine.model} (${selectedMachine.productionLine})` : (draftRequest.customMachineName || 'General Facility Asset'),
-      partName: draftRequest.partName,
-      originalPartNumber: draftRequest.originalPartNumber,
+    
+    const apiRequest: SearchCreateRequest = {
+      machine_name: selectedMachine ? `${selectedMachine.model} (${selectedMachine.productionLine})` : (draftRequest.customMachineName || 'General Facility Asset'),
+      part_name: draftRequest.partName,
+      original_part_number: draftRequest.originalPartNumber,
       manufacturer: draftRequest.manufacturer,
-      quantityNeeded: draftRequest.quantityNeeded,
-      urgency: draftRequest.urgency,
-      acceptableAlternatives: draftRequest.acceptableAlternatives,
-      customRequirements: draftRequest.customRequirements,
-      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      status: 'Researching',
-      targetComponentId: 'part-balluff-bes516',
-      trackingNotes: [
-        {
-          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          author: currentUser.name,
-          text: `Initiated research request for ${draftRequest.partName} (${draftRequest.originalPartNumber}) with urgency level: ${draftRequest.urgency}.`,
-        },
-      ],
+      quantity: draftRequest.quantityNeeded,
+      requirements: {
+        mounting: draftRequest.customRequirements.includes('flush') ? 'flush' : undefined,
+        output: draftRequest.customRequirements.includes('PNP') ? 'PNP normally open' : undefined,
+        sensing_range_mm: draftRequest.customRequirements.includes('8mm') ? 8 : undefined,
+        connector: draftRequest.customRequirements.includes('M12') ? 'M12 4-pin' : undefined,
+      },
     };
 
-    setRequests((prev) => {
-      const next = [newReq, ...prev];
-      localStorage.setItem('partscout_requests', JSON.stringify(next));
-      return next;
-    });
+    try {
+      const response = await createSearch(apiRequest);
+      const searchId = response.id;
 
-    addToast('Research Initialized', `Started intelligent discovery for ${newReqNumber}.`, 'success');
-    return newId;
+      // Also create a local request record for tracking
+      const newId = `req-${Date.now()}`;
+      const newReqNumber = `REQ-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newReq: PartRequest = {
+        id: newId,
+        requestNumber: newReqNumber,
+        machineId: draftRequest.machineId,
+        machineName: selectedMachine ? `${selectedMachine.model} (${selectedMachine.productionLine})` : (draftRequest.customMachineName || 'General Facility Asset'),
+        partName: draftRequest.partName,
+        originalPartNumber: draftRequest.originalPartNumber,
+        manufacturer: draftRequest.manufacturer,
+        quantityNeeded: draftRequest.quantityNeeded,
+        urgency: draftRequest.urgency,
+        acceptableAlternatives: draftRequest.acceptableAlternatives,
+        customRequirements: draftRequest.customRequirements,
+        createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        status: 'Researching',
+        targetComponentId: 'part-balluff-bes516',
+        trackingNotes: [
+          {
+            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            author: currentUser.name,
+            text: `Initiated research request for ${draftRequest.partName} (${draftRequest.originalPartNumber}) with urgency level: ${draftRequest.urgency}.`,
+          },
+        ],
+      };
+
+      setRequests((prev) => {
+        const next = [newReq, ...prev];
+        localStorage.setItem('partscout_requests', JSON.stringify(next));
+        return next;
+      });
+
+      addToast('Research Initialized', `Started intelligent discovery for ${newReqNumber}.`, 'success');
+      return searchId;
+    } catch (error) {
+      addToast('Error', `Failed to initiate search: ${error instanceof Error ? error.message : 'Unknown error'}`, 'warning');
+      throw error;
+    }
   };
 
   // Quotations
