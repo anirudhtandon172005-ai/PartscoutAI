@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
 import {
@@ -18,194 +18,50 @@ import {
   Sparkles,
   RotateCcw,
 } from 'lucide-react';
-import { getCandidates, CandidateResponse, CandidateEvidence } from '../api/searches';
+import { getSearch, getCandidates, CandidateResponse, SearchStatusResponse } from '../api/searches';
+import { mapCandidateToUI } from '../api/candidateAdapter';
+import { ComponentItem, SourceEvidence, SupplierOffer } from '../types';
 
-type CompatibilityResult = 'match' | 'mismatch' | 'unknown' | 'review';
-
-interface TechnicalSpecification {
-  name: string;
-  category: 'Electrical' | 'Mechanical' | 'Sensing' | 'Environmental' | 'Approvals';
-  originalValue: string;
-  candidateValue: string;
-  unit?: string;
-  result: CompatibilityResult;
-  critical: boolean;
-  explanation: string;
-  evidenceId?: string;
-}
-
-interface SourceEvidence {
-  id: string;
-  claim: string;
-  sourceTitle: string;
-  sourceDomain: string;
-  sourceUrl: string;
-  sourceType: 'Manufacturer Datasheet' | 'Distributor Catalog' | 'CAD Model Spec' | 'Direct Supplier API';
-  excerpt: string;
-  retrievalTimestamp: string;
-  confidence: number;
-  verifiedByHuman?: boolean;
-}
-
-interface SupplierOffer {
-  id: string;
-  supplierId: string;
-  supplierName: string;
-  supplierDomain: string;
-  supplierType: 'Authorized Distributor' | 'Direct Manufacturer' | 'Surplus/Independent' | 'Specialist Stockist';
-  location: string;
-  reportedPrice: number;
-  currency: string;
-  stockStatus: 'In Stock' | 'Limited Stock' | 'Call for Lead Time' | 'Made to Order';
-  quantityAvailable: number | null;
-  leadTimeDays: number;
-  minOrderQuantity: number;
-  sourceUrl: string;
-  lastChecked: string;
-  freshness: 'fresh' | 'moderate' | 'stale';
-  notes?: string;
-}
-
-interface ComponentItem {
-  id: string;
-  partNumber: string;
-  manufacturer: string;
-  name: string;
-  category: string;
-  description: string;
-  isOriginalTarget?: boolean;
-  matchScore: number;
-  matchConfidence: 'High' | 'Medium' | 'Low';
-  overallStatus: 'Drop-in Replacement' | 'Functional Equivalent' | 'Mounting Review Required' | 'Not Recommended';
-  imageUrl?: string;
-  cadAvailable?: boolean;
-  datasheetUrl?: string;
-  keySpecs: Record<string, string>;
-  specifications: TechnicalSpecification[];
-  offers: SupplierOffer[];
-  evidence: SourceEvidence[];
-  uncertaintyNotes: string[];
-}
-
-function mapCandidateToUI(candidate: CandidateResponse): ComponentItem {
-  const compatibilityMap: Record<string, ComponentItem['overallStatus']> = {
-    compatible: 'Drop-in Replacement',
-    partial: 'Mounting Review Required',
-    incompatible: 'Not Recommended',
-    unknown: 'Functional Equivalent',
-  };
-
-  const confidenceMap: Record<string, ComponentItem['matchConfidence']> = {
-    compatible: 'High',
-    partial: 'Medium',
-    incompatible: 'Low',
-    unknown: 'Medium',
-  };
-
-  // Map evidence
-  const evidence: SourceEvidence[] = candidate.evidence.map((e, idx) => ({
-    id: `ev-${candidate.id}-${idx}`,
-    claim: e.quote,
-    sourceTitle: new URL(e.source_url).hostname.replace('www.', ''),
-    sourceDomain: new URL(e.source_url).hostname,
-    sourceUrl: e.source_url,
-    sourceType: 'Manufacturer Datasheet' as const,
-    excerpt: e.quote,
-    retrievalTimestamp: new Date().toISOString(),
-    confidence: Math.round(e.confidence * 100),
-    verifiedByHuman: true,
-  }));
-
-  // Generate mock offers based on candidate
-  const offers: SupplierOffer[] = [
-    {
-      id: `off-${candidate.id}-1`,
-      supplierId: 'supp-mcmaster',
-      supplierName: 'McMaster-Carr',
-      supplierDomain: 'mcmaster.com',
-      supplierType: 'Authorized Distributor',
-      location: 'Elmhurst, IL, USA',
-      reportedPrice: 90 + Math.random() * 30,
-      currency: 'USD',
-      stockStatus: 'In Stock',
-      quantityAvailable: Math.floor(Math.random() * 20) + 1,
-      leadTimeDays: 1,
-      minOrderQuantity: 1,
-      sourceUrl: `https://mcmaster.com/search?q=${candidate.part_number}`,
-      lastChecked: '30 minutes ago',
-      freshness: 'fresh',
-    },
-    {
-      id: `off-${candidate.id}-2`,
-      supplierId: 'supp-digikey',
-      supplierName: 'DigiKey Electronics',
-      supplierDomain: 'digikey.com',
-      supplierType: 'Authorized Distributor',
-      location: 'Thief River Falls, MN, USA',
-      reportedPrice: 85 + Math.random() * 35,
-      currency: 'USD',
-      stockStatus: 'In Stock',
-      quantityAvailable: Math.floor(Math.random() * 15) + 1,
-      leadTimeDays: 1,
-      minOrderQuantity: 1,
-      sourceUrl: `https://digikey.com/search?q=${candidate.part_number}`,
-      lastChecked: '1 hour ago',
-      freshness: 'fresh',
-    },
-  ];
-
-  // Map specifications
-  const specs = candidate.specifications as Record<string, any>;
-  const keySpecs: Record<string, string> = {
-    'Thread Size': specs.mounting === 'flush' ? 'M18 x 1.0' : 'M18 x 1.0',
-    'Sensing Distance (Sn)': `${specs.sensing_range_mm || 8} mm`,
-    'Installation Type': specs.mounting ? (specs.mounting === 'flush' ? 'Shielded / Flush Mount' : 'Non-Flush') : 'Shielded / Flush Mount',
-    'Housing Length': '65 mm (Threaded: 45 mm)',
-    'Output Configuration': specs.output || 'PNP Normally Open (NO)',
-    'Operating Voltage': specs.operating_voltage || '10 ... 30 V DC',
-    'Switching Frequency': specs.switching_frequency || '500 Hz',
-    'Housing Material': specs.housing_material || 'Nickel-Plated Brass',
-    'Sensing Face Material': 'PBT Thermoplastic',
-    'Ingress Protection': specs.ingress_protection || 'IP67 / IP68',
-    'Connector Type': specs.connector || 'M12x1 Male, 4-Pin',
-    'Operating Temperature': '-25°C ... +70°C',
-  };
-
-  return {
-    id: candidate.id,
-    partNumber: candidate.part_number,
-    manufacturer: candidate.manufacturer,
-    name: `${candidate.manufacturer} ${candidate.part_number}`,
-    category: 'Inductive Sensors / Automation Presence Detection',
-    description: `${candidate.manufacturer} ${candidate.part_number} - ${candidate.specifications.mounting || 'flush'} mount inductive proximity sensor with ${candidate.specifications.output || 'PNP NO'} output.`,
-    matchScore: candidate.score,
-    matchConfidence: confidenceMap[candidate.compatibility] || 'Medium',
-    overallStatus: compatibilityMap[candidate.compatibility] || 'Functional Equivalent',
-    cadAvailable: true,
-    datasheetUrl: candidate.evidence[0]?.source_url,
-    keySpecs,
-    specifications: [],
-    offers,
-    evidence,
-    uncertaintyNotes: [],
-  };
-}
-
-export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId = 'req-2026-line4-sensor' }) => {
+export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId }) => {
   const {
     navigate,
-    requests,
-    targetPart,
     toggleSavePart,
     isPartSaved,
     setActiveEvidence,
     addToast,
   } = useApp();
 
-  const currentReq = requests.find((r) => r.id === requestId) || requests[0];
+  const [searchStatus, setSearchStatus] = useState<SearchStatusResponse | null>(null);
   const [candidates, setCandidates] = useState<ComponentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const addToastRef = useRef(addToast);
+
+  // Fetch the backend search status to get request info.
+  useEffect(() => {
+    if (!searchId) return;
+    const controller = new AbortController();
+    let active = true;
+    const fetchStatus = async () => {
+      try {
+        const status = await getSearch(searchId, controller.signal);
+        if (!active) return;
+        setSearchStatus(status);
+      } catch (err) {
+        if (active && !controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : 'Failed to load search');
+        }
+      }
+    };
+
+    void fetchStatus();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [searchId]);
+
+  const request = searchStatus?.request;
 
   const [inStockOnly, setInStockOnly] = useState(false);
   const [minMatchScore, setMinMatchScore] = useState(80);
@@ -214,24 +70,33 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (!requestId) return;
+    if (!searchId) return;
+    const controller = new AbortController();
+    let active = true;
 
     const fetchCandidates = async () => {
       try {
         setLoading(true);
-        const response = await getCandidates(requestId);
+        const response = await getCandidates(searchId, controller.signal);
+        if (!active) return;
         const mappedCandidates = response.items.map(mapCandidateToUI);
         setCandidates(mappedCandidates);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load candidates');
-        addToast('Error', 'Failed to load search results', 'warning');
+        if (active && !controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : 'Failed to load candidates');
+          addToastRef.current('Error', 'Failed to load search results', 'warning');
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
-    fetchCandidates();
-  }, [requestId, addToast]);
+    void fetchCandidates();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [searchId]);
 
   // Filter candidates
   const filteredCandidates = candidates.filter((item) => {
@@ -302,14 +167,16 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
       <div className="results-header-row">
         <div>
           <div className="results-kicker-row">
-            <span className="badge-tag live-cad">RESULTS FOR {currentReq.requestNumber}</span>
+            <span className="badge-tag live-cad">
+              {searchStatus ? `SEARCH ${searchStatus.id}` : 'SEARCH RESULTS'}
+            </span>
             <span className="text-muted-xs">Search executed across 14 targeted sources</span>
           </div>
           <h1 className="results-title">
-            Candidate Replacements for {currentReq.originalPartNumber}
+            Candidate Replacements for {request?.original_part_number || 'Loading...'}
           </h1>
           <p className="results-sub">
-            Target: <strong>{currentReq.partName}</strong> • Facility: {currentReq.machineName}
+            Target: <strong>{request?.part_name || 'Loading...'}</strong> • Facility: {request?.machine_name || 'Loading...'}
           </p>
         </div>
 
@@ -317,7 +184,8 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => navigate('/app/compare/part-ifm-igt205')}
+            onClick={() => searchId && filteredCandidates.length > 0 && navigate(`/app/search/${searchId}/compare/${filteredCandidates[0].id}`)}
+            disabled={!searchId || filteredCandidates.length === 0}
           >
             <Scale size={16} />
             <span>Open Side-by-Side Comparison</span>
@@ -333,41 +201,33 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
         </div>
       </div>
 
-      {/* Target Original Baseline Bar */}
+      {/* Target Original Baseline Bar - built from API request, NOT from mock data */}
       <div className="target-baseline-card">
         <div className="baseline-badge-col">
           <span className="baseline-tag">ORIGINAL BASELINE COMPONENT</span>
-          <span className="text-muted-xs">OEM Specification</span>
+          <span className="text-muted-xs">OEM Specification (from search request)</span>
         </div>
 
         <div className="baseline-info-col">
           <div className="baseline-title-row">
-            <h4 className="baseline-name">{targetPart.name}</h4>
-            <span className="baseline-part-num tech-font">{targetPart.partNumber}</span>
-            <span className="baseline-mfg">{targetPart.manufacturer}</span>
+            <h4 className="baseline-name">{request?.part_name || 'Loading...'}</h4>
+            <span className="baseline-part-num tech-font">{request?.original_part_number || 'Loading...'}</span>
+            <span className="baseline-mfg">{request?.manufacturer || 'Loading...'}</span>
           </div>
           <div className="baseline-specs-row">
             <span className="spec-token">M18 x 1.0 Flush</span>
-            <span className="spec-token">Sn = 8.0 mm</span>
-            <span className="spec-token">PNP Normally Open</span>
-            <span className="spec-token">10-30V DC</span>
-            <span className="spec-token">M12 4-Pin</span>
-            <span className="spec-token">Nickel-Plated Brass</span>
+            <span className="spec-token">Sn = {request?.requirements?.sensing_range_mm || 8} mm</span>
+            <span className="spec-token">{request?.requirements?.output || 'PNP Normally Open'}</span>
+            <span className="spec-token">{request?.requirements?.connector || 'M12 4-Pin'}</span>
+            <span className="spec-token">{request?.requirements?.mounting === 'flush' ? 'Flush Mount' : 'Non-Flush'}</span>
           </div>
         </div>
 
         <div className="baseline-status-col">
           <div className="stock-alert-pill text-amber">
             <AlertTriangle size={13} />
-            <span>OEM 4-6 Wk Backorder</span>
+            <span>OEM Status: {request?.manufacturer || 'Unknown'}</span>
           </div>
-          <button
-            type="button"
-            className="btn btn-outline btn-xs mt-2"
-            onClick={() => navigate(`/app/parts/${targetPart.id}`)}
-          >
-            <span>View Baseline Sheet</span>
-          </button>
         </div>
       </div>
 
@@ -574,7 +434,7 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
                       </div>
 
                       <div className="demo-timestamp-row">
-                        <DemoBadge variant="timestamp-only" lastChecked={bestOffer.lastChecked} />
+                        <DemoBadge variant="timestamp-only" lastChecked={bestOffer.lastChecked ?? undefined} />
                       </div>
                     </div>
                   ) : (
@@ -587,7 +447,8 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => navigate(`/app/compare/${candidate.id}`)}
+                      onClick={() => searchId && navigate(`/app/search/${searchId}/compare/${candidate.id}`)}
+                      disabled={!searchId}
                     >
                       <Scale size={14} />
                       <span>Compare Specs</span>
@@ -596,7 +457,8 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
                     <button
                       type="button"
                       className="btn btn-outline btn-sm"
-                      onClick={() => navigate(`/app/parts/${candidate.id}`)}
+                      onClick={() => searchId && navigate(`/app/search/${searchId}/parts/${candidate.id}`)}
+                      disabled={!searchId}
                     >
                       <span>3D Model & Offers</span>
                     </button>

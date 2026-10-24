@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
+import { DEMO_SEARCH_ID, DEMO_ADMIN_METRICS } from '../data/mockData';
 import {
   Globe2,
   Activity,
@@ -25,7 +26,6 @@ import {
   X,
   FileCheck2,
 } from 'lucide-react';
-import { DEMO_ADMIN_METRICS } from '../data/mockData';
 
 interface AdminViewProps {
   subpage: 'dashboard' | 'sources' | 'jobs' | 'products' | 'suppliers' | 'quality' | 'users' | 'settings';
@@ -62,6 +62,9 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
       enabled: true,
       crawlFrequency: newSourceFrequency,
       notes: 'Manually added target domain in prototype registry.',
+      workspaceId: 'local-demo',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
     setShowAddSourceModal(false);
     setNewSourceName('');
@@ -419,7 +422,7 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
                       <button
                         type="button"
                         className="btn btn-outline btn-xs"
-                        onClick={() => navigate(`/app/parts/${part.id}`)}
+                        onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/parts/${part.id}`)}
                       >
                         Inspect Record
                       </button>
@@ -524,7 +527,7 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
                       </span>
                     </td>
                     <td>
-                      <strong>{issue.type}</strong>
+                      <strong>{issue.issueType}</strong>
                       <div className="text-muted-xs tech-font">{issue.detectedAt}</div>
                     </td>
                     <td>

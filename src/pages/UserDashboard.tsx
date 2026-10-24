@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
+import { DEMO_SEARCH_ID } from '../data/mockData';
 import {
   Search,
   PlusCircle,
@@ -99,7 +100,7 @@ export const UserDashboard: React.FC = () => {
             <button
               type="button"
               className="metric-link-btn"
-              onClick={() => navigate('/app/compare/part-ifm-igt205')}
+              onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/part-ifm-igt205`)}
             >
               Compare <ArrowRight size={12} />
             </button>
@@ -234,7 +235,7 @@ export const UserDashboard: React.FC = () => {
                   <button
                     type="button"
                     className="btn btn-secondary btn-xs"
-                    onClick={() => navigate('/app/compare/part-ifm-igt205')}
+                    onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/part-ifm-igt205`)}
                   >
                     <span>Inspect 96% Match Specs</span>
                     <ArrowRight size={12} />
@@ -242,7 +243,7 @@ export const UserDashboard: React.FC = () => {
                   <button
                     type="button"
                     className="btn btn-outline btn-xs"
-                    onClick={() => navigate('/app/availability/part-ifm-igt205')}
+                    onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/parts/part-ifm-igt205`)}
                   >
                     <span>Check McMaster Stock ($108.40)</span>
                   </button>
@@ -323,14 +324,14 @@ export const UserDashboard: React.FC = () => {
                       <button
                         type="button"
                         className="btn btn-outline btn-xs"
-                        onClick={() => navigate(`/app/parts/${part.id}`)}
+                        onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/parts/${part.id}`)}
                       >
                         3D Twin
                       </button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-xs"
-                        onClick={() => navigate(`/app/compare/${part.id}`)}
+                        onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/${part.id}`)}
                       >
                         Compare
                       </button>

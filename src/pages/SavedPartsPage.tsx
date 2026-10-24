@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
+import { DEMO_SEARCH_ID } from '../data/mockData';
 import {
   Bookmark,
   Scale,
@@ -54,7 +55,7 @@ export const SavedPartsPage: React.FC = () => {
           <button
             type="button"
             className="btn btn-outline mt-3"
-            onClick={() => navigate('/app/results/req-2026-line4-sensor')}
+            onClick={() => navigate(`/app/results/${DEMO_SEARCH_ID}`)}
           >
             <span>Explore Line 4 Proximity Sensor Candidates</span>
             <ArrowRight size={14} />
@@ -97,7 +98,7 @@ export const SavedPartsPage: React.FC = () => {
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  onClick={() => navigate(`/app/compare/${part.id}`)}
+                  onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/${part.id}`)}
                 >
                   <Scale size={13} />
                   <span>Compare</span>
@@ -106,7 +107,7 @@ export const SavedPartsPage: React.FC = () => {
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  onClick={() => navigate(`/app/parts/${part.id}`)}
+                  onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/parts/${part.id}`)}
                 >
                   <span>3D Twin & Offers</span>
                   <ArrowRight size={13} />

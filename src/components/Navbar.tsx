@@ -13,7 +13,8 @@ import {
   ArrowRight,
   Flame,
   Radio,
-  CheckCircle2
+  CheckCircle2,
+  LogOut
 } from 'lucide-react';
 import { DemoBadge } from './DemoBadge';
 
@@ -23,7 +24,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOpen }) => {
-  const { currentRoute, navigate, userRole, setUserRole, currentUser, requests } = useApp();
+  const { currentRoute, navigate, userRole, setUserRole, currentUser, requests, signOut, isAuthenticated } = useApp();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [navSearch, setNavSearch] = useState('');
 
@@ -268,6 +269,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
                     <Building size={12} />
                     <span>Apex PackWorks • Plant B4</span>
                   </div>
+                  {isAuthenticated && (
+                    <button type="button" className="link-btn" onClick={() => void signOut()}>
+                      <LogOut size={13} /> Sign out
+                    </button>
+                  )}
                 </div>
               </div>
             )}

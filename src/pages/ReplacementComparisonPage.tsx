@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
 import {
@@ -15,25 +15,137 @@ import {
   ArrowRight,
   Bookmark,
 } from 'lucide-react';
+import { getSearch, getCandidates, CandidateResponse, SearchStatusResponse } from '../api/searches';
+import { mapCandidateToUI } from '../api/candidateAdapter';
+import { ComponentItem, TechnicalSpecification } from '../types';
 
-export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ candidateId = 'part-ifm-igt205' }) => {
-  const {
-    candidates,
-    targetPart,
-    navigate,
-    setActiveEvidence,
-    toggleSavePart,
-    isPartSaved,
-    addToast,
-  } = useApp();
+export const ReplacementComparisonPage: React.FC<{ searchId?: string; candidateId?: string }> = ({ searchId, candidateId }) => {
+  const { navigate, setActiveEvidence, toggleSavePart, isPartSaved, addToast } = useApp();
 
-  const [selectedCandidateId, setSelectedCandidateId] = useState(candidateId);
+  const [searchStatus, setSearchStatus] = useState<SearchStatusResponse | null>(null);
+  const [candidates, setCandidates] = useState<ComponentItem[]>([]);
+  const [selectedCandidateId, setSelectedCandidateId] = useState(candidateId || '');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const addToastRef = useRef(addToast);
+
+  // Fetch search status
+  useEffect(() => {
+    if (!searchId) return;
+    const controller = new AbortController();
+    let active = true;
+    const fetchStatus = async () => {
+      try {
+        const status = await getSearch(searchId, controller.signal);
+        if (!active) return;
+        setSearchStatus(status);
+      } catch (err) {
+        if (active && !controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : 'Failed to load search');
+        }
+      }
+    };
+    void fetchStatus();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [searchId]);
+
+  // Fetch candidates
+  useEffect(() => {
+    if (!searchId) return;
+    const controller = new AbortController();
+    let active = true;
+
+    const fetchCandidates = async () => {
+      try {
+        setLoading(true);
+        const response = await getCandidates(searchId, controller.signal);
+        if (!active) return;
+        const mappedCandidates = response.items.map(mapCandidateToUI);
+        setCandidates(mappedCandidates);
+        if (mappedCandidates.length > 0 && !selectedCandidateId) {
+          setSelectedCandidateId(mappedCandidates[0].id);
+        }
+      } catch (err) {
+        if (active && !controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : 'Failed to load candidates');
+          addToastRef.current('Error', 'Failed to load comparison data', 'warning');
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void fetchCandidates();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [searchId]);
+
   const candidate = candidates.find((c) => c.id === selectedCandidateId) || candidates[0];
 
-  const isSaved = isPartSaved(candidate.id);
+  if (loading) {
+    return (
+      <div className="compare-page-root">
+        <DemoBadge variant="banner" lastChecked="Loading..." />
+        <div className="loading-container">
+          <div className="spinner-large"></div>
+          <p>Loading comparison data...</p>
+        </div>
+      </div>
+    );
+  }
 
-  // Group specs by category
-  const categories = ['Mechanical', 'Sensing', 'Electrical', 'Environmental'] as const;
+  if (error) {
+    return (
+      <div className="compare-page-root">
+        <DemoBadge variant="banner" lastChecked="Error" />
+        <div className="error-container">
+          <AlertTriangle size={48} className="text-red" />
+          <h3>Failed to Load Comparison</h3>
+          <p>{error}</p>
+          <button className="btn btn-primary mt-4" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!candidate) {
+    return (
+      <div className="compare-page-root">
+        <DemoBadge variant="banner" lastChecked="No Candidates" />
+        <div className="error-container">
+          <AlertTriangle size={48} className="text-amber" />
+          <h3>No Candidates Available</h3>
+          <p>This search has no candidates to compare.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!searchId) {
+    return (
+      <div className="compare-page-root">
+        <DemoBadge variant="banner" lastChecked="Invalid Route" />
+        <div className="error-container">
+          <AlertTriangle size={48} className="text-red" />
+          <h3>Invalid Route</h3>
+          <p>This page requires a search ID. Navigate from search results.</p>
+          <button className="btn btn-primary mt-4" onClick={() => navigate('/app/dashboard')}>
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isSaved = isPartSaved(candidate.id);
+  const request = searchStatus?.request;
 
   const getStatusBadge = (result: 'match' | 'mismatch' | 'unknown' | 'review') => {
     switch (result) {
@@ -67,7 +179,7 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
   return (
     <div className="compare-page-root">
       {/* Top Banner Notice */}
-      <DemoBadge variant="banner" lastChecked="Simulated Engineering Matrix" />
+      <DemoBadge variant="banner" lastChecked="Deterministic Parameter Audit" />
 
       {/* Header with Candidate Switcher */}
       <div className="compare-header-row">
@@ -83,23 +195,25 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
         </div>
 
         {/* Candidate Selector Dropdown */}
-        <div className="candidate-selector-box">
-          <label className="selector-label" htmlFor="candidate-select">Select Alternative Candidate:</label>
-          <div className="select-wrapper">
-            <select
-              id="candidate-select"
-              className="form-select candidate-dropdown"
-              value={selectedCandidateId}
-              onChange={(e) => setSelectedCandidateId(e.target.value)}
-            >
-              {candidates.map((cand) => (
-                <option key={cand.id} value={cand.id}>
-                  {cand.manufacturer} {cand.partNumber} ({cand.matchScore}% - {cand.overallStatus})
-                </option>
-              ))}
-            </select>
+        {searchId && candidates.length > 0 && (
+          <div className="candidate-selector-box">
+            <label className="selector-label" htmlFor="candidate-select">Select Alternative Candidate:</label>
+            <div className="select-wrapper">
+              <select
+                id="candidate-select"
+                className="form-select candidate-dropdown"
+                value={selectedCandidateId}
+                onChange={(e) => setSelectedCandidateId(e.target.value)}
+              >
+                {candidates.map((cand) => (
+                  <option key={cand.id} value={cand.id}>
+                    {cand.manufacturer} {cand.partNumber} ({cand.matchScore}% - {cand.overallStatus})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* CRITICAL DISCLAIMER BANNER (Prompt requirement: Never imply score certifies interchangeability!) */}
@@ -115,27 +229,18 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
 
       {/* Side-by-Side Hero Comparison Cards */}
       <div className="compare-hero-cards-grid">
-        {/* Original Baseline Card */}
+        {/* Original Baseline Card - built from API request, NOT from mock data */}
         <div className="hero-part-card original-card">
           <div className="card-ribbon ribbon-neutral">ORIGINAL TARGET BASELINE</div>
           <div className="part-header-info">
-            <span className="part-mfg-tag">{targetPart.manufacturer}</span>
-            <h3 className="part-number-display tech-font">{targetPart.partNumber}</h3>
-            <p className="part-name-display">{targetPart.name}</p>
+            <span className="part-mfg-tag">{request?.manufacturer || 'Loading...'}</span>
+            <h3 className="part-number-display tech-font">{request?.original_part_number || 'Loading...'}</h3>
+            <p className="part-name-display">{request?.part_name || 'Loading...'}</p>
           </div>
           <div className="part-meta-strip">
             <span className="meta-pill">M18x1.0 Flush</span>
-            <span className="meta-pill">Sn = 8.0 mm</span>
-            <span className="meta-pill">PNP NO DC</span>
-          </div>
-          <div className="part-action-row">
-            <button
-              type="button"
-              className="btn btn-outline btn-xs"
-              onClick={() => navigate(`/app/parts/${targetPart.id}`)}
-            >
-              <span>View Baseline Datasheet</span>
-            </button>
+            <span className="meta-pill">Sn = {request?.requirements?.sensing_range_mm || 8} mm</span>
+            <span className="meta-pill">{request?.requirements?.output || 'PNP NO DC'}</span>
           </div>
         </div>
 
@@ -167,7 +272,8 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
             <button
               type="button"
               className="btn btn-secondary btn-xs"
-              onClick={() => navigate(`/app/parts/${candidate.id}`)}
+              onClick={() => searchId && navigate(`/app/search/${searchId}/parts/${candidate.id}`)}
+              disabled={!searchId}
             >
               <span>Inspect 3D Twin & CAD</span>
             </button>
@@ -212,14 +318,14 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
             <thead>
               <tr>
                 <th style={{ width: '22%' }}>Technical Requirement</th>
-                <th style={{ width: '22%' }}>Original ({targetPart.partNumber})</th>
+                <th style={{ width: '22%' }}>Original ({request?.original_part_number || 'Loading...'})</th>
                 <th style={{ width: '22%' }}>Candidate ({candidate.partNumber})</th>
                 <th style={{ width: '14%' }}>Result</th>
                 <th style={{ width: '20%' }}>Engineering Explanation & Evidence</th>
               </tr>
             </thead>
             <tbody>
-              {candidate.specifications.map((spec, idx) => (
+              {candidate.specifications.map((spec: TechnicalSpecification, idx: number) => (
                 <tr key={idx} className={spec.critical ? 'row-critical' : ''}>
                   <td>
                     <div className="spec-req-name">

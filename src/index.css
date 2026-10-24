@@ -3337,6 +3337,13 @@ h1, h2, h3, h4, h5, h6 {
   resize: vertical;
 }
 
+.form-error {
+  margin: 0.75rem 0 0;
+  color: #B42318;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .form-row {
   display: flex;
   gap: 1rem;

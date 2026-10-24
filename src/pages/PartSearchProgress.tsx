@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
 import {
@@ -9,210 +9,179 @@ import {
   ShieldCheck,
   CheckCircle2,
   AlertTriangle,
-  Play,
-  Pause,
   ArrowRight,
   Terminal,
-  RotateCcw,
-  Clock,
-  ExternalLink,
   Search,
 } from 'lucide-react';
-import { getSearch, getCandidates, SearchStatusResponse } from '../api/searches';
+import { getSearch, getCandidates, SearchStatusResponse, SearchStage } from '../api/searches';
 
 interface Stage {
-  id: number;
+  id: SearchStage;
   name: string;
   desc: string;
   icon: React.ReactNode;
-  status: 'pending' | 'running' | 'completed' | 'error';
   metric: string;
 }
 
-export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId }) => {
-  const { navigate, requests, addToast } = useApp();
+const STAGE_CONFIG: Stage[] = [
+  {
+    id: 'source_discovery',
+    name: 'Source Discovery',
+    desc: 'Identify targeted manufacturer portals and franchised distributors matching M18 inductive category.',
+    icon: <Globe size={18} />,
+    metric: '14 Domains Target Registry',
+  },
+  {
+    id: 'page_retrieval',
+    name: 'Page Retrieval & Parsing',
+    desc: 'Retrieve catalog DOM and structured PDF datasheets for candidate part numbers.',
+    icon: <Download size={18} />,
+    metric: '38 Pages Fetched',
+  },
+  {
+    id: 'attribute_extraction',
+    name: 'Attribute & Offer Extraction',
+    desc: 'Extract electrical, mechanical, and pricing attributes using deterministic table extractors.',
+    icon: <Layers size={18} />,
+    metric: '4 Candidates Identified',
+  },
+  {
+    id: 'normalization',
+    name: 'Unit Normalization',
+    desc: 'Normalize millimeter lengths, thread pitch, voltage ranges, and switching polarities to IEC standards.',
+    icon: <Scale size={18} />,
+    metric: '12 Standardized Attributes',
+  },
+  {
+    id: 'validation',
+    name: 'Deterministic Requirement Validation',
+    desc: 'Validate candidates against Line 4 M18 flush, PNP NO, 8mm sensing range requirement rules.',
+    icon: <CheckCircle2 size={18} />,
+    metric: '96% Max Compatibility',
+  },
+  {
+    id: 'evidence_compilation',
+    name: 'Evidence & Uncertainty Compilation',
+    desc: 'Extract verifiable text citations, catalog publication dates, and flag stale inventory.',
+    icon: <ShieldCheck size={18} />,
+    metric: '4 Primary Citations Attached',
+  },
+];
 
-  const currentReq = requestId ? requests.find((r) => r.id === requestId) : null;
+function getVisualStageIndex(stage: SearchStage | null): number {
+  switch (stage) {
+    case 'source_discovery':
+      return 0;
+    case 'page_retrieval':
+      return 1;
+    case 'attribute_extraction':
+      return 2;
+    case 'normalization':
+      return 3;
+    case 'validation':
+      return 4;
+    case 'evidence_compilation':
+      return 5;
+    default:
+      return 0;
+  }
+}
 
-  const [currentStageIndex, setCurrentStageIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [simulatedError, setSimulatedError] = useState(false);
+function getStageStatus(
+  stageId: SearchStage,
+  backendStage: SearchStage | null,
+  status: SearchStatusResponse['status'],
+): 'pending' | 'running' | 'completed' | 'error' {
+  if (status === 'queued') {
+    return 'pending';
+  }
+  if (status === 'failed') {
+    const backendIndex = backendStage ? getVisualStageIndex(backendStage) : -1;
+    const stageIndex = getVisualStageIndex(stageId);
+    if (stageIndex < backendIndex) return 'completed';
+    if (stageIndex === backendIndex) return 'error';
+    return 'pending';
+  }
+  if (status === 'completed') {
+    return 'completed';
+  }
+  // running
+  const backendIndex = backendStage ? getVisualStageIndex(backendStage) : -1;
+  const stageIndex = getVisualStageIndex(stageId);
+  if (stageIndex < backendIndex) return 'completed';
+  if (stageIndex === backendIndex) return 'running';
+  return 'pending';
+}
+
+export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }) => {
+  const { navigate, addToast } = useApp();
+
   const [searchStatus, setSearchStatus] = useState<SearchStatusResponse | null>(null);
-  const [candidates, setCandidates] = useState<any[]>([]);
-  const [isPolling, setIsPolling] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<Awaited<ReturnType<typeof getCandidates>>['items']>([]);
+  const [error, setError] = useState<string | null>(() => (searchId ? null : 'Missing search ID.'));
+  const addToastRef = useRef(addToast);
 
-  const initialStages: Stage[] = [
-    {
-      id: 1,
-      name: 'Source Discovery',
-      desc: 'Identify targeted manufacturer portals and franchised distributors matching M18 inductive category.',
-      icon: <Globe size={18} />,
-      status: 'pending',
-      metric: '14 Domains Target Registry',
-    },
-    {
-      id: 2,
-      name: 'Page Retrieval & Parsing',
-      desc: 'Retrieve catalog DOM and structured PDF datasheets for candidate part numbers.',
-      icon: <Download size={18} />,
-      status: 'pending',
-      metric: '38 Pages Fetched',
-    },
-    {
-      id: 3,
-      name: 'Attribute & Offer Extraction',
-      desc: 'Extract electrical, mechanical, and pricing attributes using deterministic table extractors.',
-      icon: <Layers size={18} />,
-      status: 'pending',
-      metric: '4 Candidates Identified',
-    },
-    {
-      id: 4,
-      name: 'Unit Normalization',
-      desc: 'Normalize millimeter lengths, thread pitch, voltage ranges, and switching polarities to IEC standards.',
-      icon: <Scale size={18} />,
-      status: 'pending',
-      metric: '12 Standardized Attributes',
-    },
-    {
-      id: 5,
-      name: 'Deterministic Requirement Validation',
-      desc: 'Validate candidates against Line 4 M18 flush, PNP NO, 8mm sensing range requirement rules.',
-      icon: <CheckCircle2 size={18} />,
-      status: 'pending',
-      metric: '96% Max Compatibility',
-    },
-    {
-      id: 6,
-      name: 'Evidence & Uncertainty Compilation',
-      desc: 'Extract verifiable text citations, catalog publication dates, and flag stale inventory.',
-      icon: <ShieldCheck size={18} />,
-      status: 'pending',
-      metric: '4 Primary Citations Attached',
-    },
-  ];
-
-  const [stages, setStages] = useState<Stage[]>(initialStages);
-
-  // Poll backend for search status
+  // Poll the backend sequentially; the next request is scheduled only after the current one finishes.
   useEffect(() => {
-    if (!requestId) return;
+    if (!searchId) return;
 
-    let isMounted = true;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let active = true;
+    let completionNotified = false;
 
-    const pollSearch = async () => {
+    const loadStatus = async () => {
       try {
-        const status = await getSearch(requestId);
-        if (!isMounted) return;
-
+        const status = await getSearch(searchId, controller.signal);
+        if (!active) return;
         setSearchStatus(status);
+        setError(status.status === 'failed' ? status.error || 'Search failed' : null);
 
-        // Update stages based on backend status
         if (status.status === 'completed') {
-          setStages((prev) => prev.map((s) => ({ ...s, status: 'completed' })));
-          setCurrentStageIndex(stages.length);
-          setIsPolling(false);
-
-          // Fetch candidates
-          try {
-            const candidatesResponse = await getCandidates(requestId);
-            if (isMounted) {
-              setCandidates(candidatesResponse.items);
-            }
-          } catch (err) {
-            console.error('Failed to fetch candidates:', err);
+          const candidatesResponse = await getCandidates(searchId, controller.signal);
+          if (!active) return;
+          setCandidates(candidatesResponse.items);
+          if (!completionNotified) {
+            completionNotified = true;
+            addToastRef.current('Research Completed', 'Candidate replacements found.', 'success');
           }
-
-          addToast('Research Completed', 'Candidate replacements found.', 'success');
-        } else if (status.status === 'failed') {
-          setStages((prev) => prev.map((s, idx) => idx === currentStageIndex ? { ...s, status: 'error' } : s));
-          setIsPolling(false);
-          setError(status.error || 'Search failed');
-          addToast('Search Failed', status.error || 'Unknown error', 'warning');
-        } else if (status.status === 'running' || status.status === 'queued') {
-          // Animate stages progressively
-          const nextStage = Math.min(currentStageIndex + 1, stages.length - 1);
-          if (nextStage > currentStageIndex) {
-            setCurrentStageIndex(nextStage);
-            setStages((prev) =>
-              prev.map((s, idx) => {
-                if (idx < nextStage) return { ...s, status: 'completed' };
-                if (idx === nextStage) return { ...s, status: 'running' };
-                return { ...s, status: 'pending' };
-              })
-            );
-            const logMessages = [
-              `[0.4s] [DISCOVERY] Resolved targeted catalog registry: balluff.com, ifm.com, turck.us, pepperl-fuchs.com, mcmaster.com, radwell.com, digikey.com.`,
-              `[1.2s] [FETCH] Retrieved product datasheets & DOM content for BES 516, IGT205, Bi8U-M18, NBB8, IME18 (HTTP 200 OK).`,
-              `[2.1s] [EXTRACT] Extracted 48 raw technical parameters and 7 real-time supplier offers across 4 geographic hubs.`,
-              `[3.0s] [NORMALIZE] Standardized attributes to IEC 60947-5-2: Thread M18x1.0, Sn 8.0mm, DC 3-wire PNP Normally Open.`,
-              `[3.8s] [COMPARE] Evaluated candidate matrix: ifm IGT205 (96% drop-in), Turck Bi8U (92% equivalent), P+F NBB8 (88% mounting review).`,
-              `[4.5s] [EVIDENCE] Compiled 4 primary PDF citations with retrieval timestamps and verified audit excerpts.`,
-            ];
-            if (nextStage <= logMessages.length) {
-              setLogs((prev) => [...prev, logMessages[nextStage - 1]]);
-            }
-          }
+          return;
         }
+
+        if (status.status === 'failed') {
+          if (!completionNotified) {
+            completionNotified = true;
+            addToastRef.current('Search Failed', status.error || 'Unknown error', 'warning');
+          }
+          return;
+        }
+
+        timer = setTimeout(loadStatus, 1000);
       } catch (err) {
-        if (!isMounted) return;
-        console.error('Polling error:', err);
-        setError(err instanceof Error ? err.message : 'Polling failed');
-        setIsPolling(false);
+        if (!active || controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : 'Unable to load search status');
       }
     };
 
-    // Initial poll
-    pollSearch();
-
-    // Poll every 1 second while running/queued
-    const interval = setInterval(() => {
-      if (isPolling && searchStatus?.status !== 'completed' && searchStatus?.status !== 'failed') {
-        pollSearch();
-      }
-    }, 1000);
-
+    void loadStatus();
     return () => {
-      isMounted = false;
-      clearInterval(interval);
+      active = false;
+      controller.abort();
+      if (timer) clearTimeout(timer);
     };
-  }, [requestId, currentStageIndex, isPolling, searchStatus?.status]);
+  }, [searchId]);
 
   const isComplete = searchStatus?.status === 'completed';
   const isFailed = searchStatus?.status === 'failed';
+  const isQueued = searchStatus?.status === 'queued';
+  const isRunning = searchStatus?.status === 'running';
 
-  const handleReset = () => {
-    setCurrentStageIndex(0);
-    setLogs([]);
-    setSimulatedError(false);
-    setStages(initialStages);
-    setSearchStatus(null);
-    setCandidates([]);
-    setIsPolling(true);
-    setError(null);
-  };
-
-  const handleToggleError = () => {
-    if (!simulatedError) {
-      setSimulatedError(true);
-      setLogs((prev) => [
-        ...prev,
-        `[WARN] [RATE_LIMIT] Provider gateway returned HTTP 429 Too Many Requests on secondary source. Retrying with exponential backoff...`,
-      ]);
-      addToast('Crawler Demonstration', 'Simulated transient source rate-limit and backoff.', 'warning');
-    } else {
-      setSimulatedError(false);
-      setLogs((prev) => [...prev, `[INFO] [RECOVERED] Rate limit window cleared. Resuming crawl pipeline.`]);
-      addToast('Crawler Recovered', 'Resuming simulated extraction.', 'success');
-    }
-  };
+  const request = searchStatus?.request;
 
   return (
     <div className="search-progress-root">
       {/* Top Banner Notice */}
-      <DemoBadge variant="banner" lastChecked="Live Crawler Simulation" />
+      <DemoBadge variant="banner" lastChecked="LOCAL SEARCH PROVIDER" />
 
       {/* Header */}
       <div className="search-progress-header">
@@ -221,10 +190,10 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
             <span className="dot pulse"></span> SEARCH EXECUTION PIPELINE
           </span>
           <h1 className="search-progress-title">
-            Researching Cross-References for {currentReq?.originalPartNumber || 'Loading...'}
+            Researching Cross-References for {request?.original_part_number || 'Loading...'}
           </h1>
           <p className="search-progress-sub">
-            Target Part: <strong>{currentReq?.partName || 'Loading...'}</strong> • Facility Machine: {currentReq?.machineName || 'Loading...'}
+            Target Part: <strong>{request?.part_name || 'Loading...'}</strong> • Facility Machine: {request?.machine_name || 'Loading...'}
           </p>
         </div>
 
@@ -233,42 +202,23 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            onClick={() => setIsPaused(!isPaused)}
-            title="Pause or resume crawler simulation"
+            onClick={() => navigate('/app/dashboard')}
+            title="Return to dashboard"
           >
-            {isPaused ? <Play size={14} /> : <Pause size={14} />}
-            <span>{isPaused ? 'Resume' : 'Pause'}</span>
+            <Search size={14} />
+            <span>New Search</span>
           </button>
 
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={handleToggleError}
-            title="Demonstrate crawler error state and backoff"
-          >
-            <AlertTriangle size={14} className={simulatedError ? 'text-orange' : 'text-muted'} />
-            <span>{simulatedError ? 'Clear Error State' : 'Simulate Stale Error'}</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={handleReset}
-            title="Restart simulation"
-          >
-            <RotateCcw size={14} />
-            <span>Restart</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-primary btn-sm shadow-lift"
-            onClick={() => currentReq && navigate(`/app/results/${currentReq.id}`)}
-            disabled={!isComplete}
-          >
-            <span>{isComplete ? 'View Search Results' : 'Skip Directly to Results'}</span>
-            <ArrowRight size={14} />
-          </button>
+          {isFailed && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => searchId && navigate(`/app/requests/new/machine`)}
+            >
+              <span>Retry Search</span>
+              <ArrowRight size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -276,39 +226,49 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
       <div className="progress-metric-strip">
         <div className="metric-col">
           <span className="strip-lbl">Research Status</span>
-          <strong className={`strip-val ${isComplete ? 'text-teal' : isFailed ? 'text-red' : 'text-orange'}`}>
-            {isFailed ? 'Failed' : isComplete ? 'Research Completed' : searchStatus?.status === 'running' ? 'Crawl in Progress...' : searchStatus?.status === 'queued' ? 'Queued...' : 'Initializing...'}
+          <strong className={`strip-val ${isComplete ? 'text-teal' : isFailed ? 'text-red' : isRunning ? 'text-orange' : 'text-amber'}`}>
+            {isFailed
+              ? 'Failed'
+              : isComplete
+              ? 'Research Completed'
+              : isRunning
+              ? `Running: ${searchStatus?.stage_message || 'Processing...'}`
+              : isQueued
+              ? 'Queued...'
+              : 'Initializing...'}
           </strong>
         </div>
 
         <div className="metric-col">
-          <span className="strip-lbl">Targeted Domains</span>
-          <strong className="strip-val tech-font">14 Catalog Registries</strong>
+          <span className="strip-lbl">Progress</span>
+          <strong className="strip-val tech-font">{searchStatus?.progress_percent ?? 0}%</strong>
         </div>
 
         <div className="metric-col">
-          <span className="strip-lbl">Identified Candidates</span>
-          <strong className="strip-val tech-font text-teal">{candidates.length > 0 ? `${candidates.length} Equivalents Found` : searchStatus?.candidate_count ? `${searchStatus.candidate_count} Equivalents Found` : 'Searching...'}</strong>
+          <span className="strip-lbl">Current Stage</span>
+          <strong className="strip-val tech-font text-teal">{searchStatus?.stage ? searchStatus.stage.replace('_', ' ').toUpperCase() : 'PENDING'}</strong>
         </div>
 
         <div className="metric-col">
-          <span className="strip-lbl">Top Match Score</span>
-          <strong className="strip-val tech-font text-teal">96% (ifm IGT205)</strong>
+          <span className="strip-lbl">Candidates Found</span>
+          <strong className="strip-val tech-font text-teal">{searchStatus?.candidate_count ?? 0} Equivalents</strong>
         </div>
       </div>
 
       {/* Stages Grid */}
       <div className="stages-container">
-        <h3 className="stages-header-label">7-STAGE DISCOVERY & NORMALIZATION ARCHITECTURE</h3>
+        <h3 className="stages-header-label">6-STAGE DISCOVERY & NORMALIZATION ARCHITECTURE</h3>
         <div className="stages-list">
-          {stages.map((stage, idx) => {
-            const isStageDone = idx < currentStageIndex || isComplete;
-            const isStageActive = idx === currentStageIndex && !isComplete && !isFailed;
+          {STAGE_CONFIG.map((stage, idx) => {
+            const stageStatus = getStageStatus(stage.id, searchStatus?.stage ?? null, searchStatus?.status ?? 'queued');
+            const isStageDone = stageStatus === 'completed';
+            const isStageActive = stageStatus === 'running';
+            const isStageError = stageStatus === 'error';
 
             return (
               <div
                 key={stage.id}
-                className={`stage-card ${isStageDone ? 'completed' : isStageActive ? 'running' : isFailed && idx >= currentStageIndex ? 'error' : 'pending'}`}
+                className={`stage-card ${isStageDone ? 'completed' : isStageActive ? 'running' : isStageError ? 'error' : 'pending'}`}
               >
                 <div className="stage-status-col">
                   {isStageDone ? (
@@ -319,12 +279,12 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
                     <div className="stage-spinner-icon">
                       <span className="spinner-dot"></span>
                     </div>
-                  ) : isFailed && idx >= currentStageIndex ? (
+                  ) : isStageError ? (
                     <div className="stage-error-icon">
                       <AlertTriangle size={18} className="text-red" />
                     </div>
                   ) : (
-                    <div className="stage-pending-icon">{stage.id}</div>
+                    <div className="stage-pending-icon">{idx + 1}</div>
                   )}
                 </div>
 
@@ -346,45 +306,78 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
         <div className="terminal-header">
           <div className="terminal-title">
             <Terminal size={14} className="text-teal" />
-            <span>Targeted Crawler Standard Output (Demo Stream)</span>
+            <span>Targeted Crawler Standard Output (Backend-Driven)</span>
           </div>
           <span className="terminal-status tech-font">
-            {isPaused ? 'STREAM PAUSED' : isComplete ? 'PIPELINE DONE' : isFailed ? 'FAILED' : 'STREAMING LIVE'}
+            {isComplete ? 'PIPELINE DONE' : isFailed ? 'FAILED' : isRunning ? 'STREAMING LIVE' : 'INITIALIZING'}
           </span>
         </div>
 
         <div className="terminal-body tech-font">
-          {logs.map((log, index) => (
-            <div key={index} className="log-line">
+          {searchStatus?.status === 'queued' && (
+            <div className="log-line">
               <span className="log-bullet">{'>'}</span>
-              <span>{log}</span>
+              <span>Search queued. Initializing crawler worker queue...</span>
             </div>
-          ))}
-          {logs.length === 0 && <div className="text-muted">Initializing crawler worker queue...</div>}
-          {!isComplete && !isPaused && !simulatedError && !isFailed && (
-            <div className="log-line text-teal">
-              <span className="cursor-blink">▋</span>
-            </div>
+          )}
+          {searchStatus?.status === 'running' && (
+            <>
+              <div className="log-line">
+                <span className="log-bullet">{'>'}</span>
+                <span>[{searchStatus.progress_percent}%] {searchStatus.stage_message}</span>
+              </div>
+              <div className="log-line text-teal">
+                <span className="cursor-blink">▋</span>
+              </div>
+            </>
+          )}
+          {searchStatus?.status === 'completed' && (
+            <>
+              <div className="log-line">
+                <span className="log-bullet">{'>'}</span>
+                <span>[100%] Search completed. {searchStatus.candidate_count} candidates compiled.</span>
+              </div>
+              <div className="log-line text-teal">
+                <span>Pipeline finished successfully.</span>
+              </div>
+            </>
+          )}
+          {searchStatus?.status === 'failed' && (
+            <>
+              <div className="log-line text-red">
+                <span className="log-bullet">{'>'}</span>
+                <span>[ERROR] {searchStatus.error || 'Unknown error'}</span>
+              </div>
+              <div className="log-line text-red">
+                <span className="log-bullet">{'>'}</span>
+                <span>Pipeline terminated at stage: {searchStatus?.stage?.replace('_', ' ') || 'unknown'}</span>
+              </div>
+            </>
+          )}
+          {!searchStatus && (
+            <div className="text-muted">Connecting to backend...</div>
           )}
         </div>
       </div>
 
       {/* Completed State Handoff CTA */}
-      {(isComplete || candidates.length > 0) && (
+      {isComplete && (
         <div className="completed-handoff-banner">
           <div className="handoff-content">
             <CheckCircle2 size={24} className="text-teal" />
             <div>
               <h3 className="handoff-title">Part Intelligence Ready for Engineering Review</h3>
               <p className="handoff-desc">
-                {candidates.length > 0 ? `${candidates.length} viable candidate replacements have been extracted and compared against Line 4 constraints.` : 'Candidate replacements have been extracted and compared against constraints.'}
+                {candidates.length > 0
+                  ? `${candidates.length} viable candidate replacements have been extracted and compared against constraints.`
+                  : 'Candidate replacements have been extracted and compared against constraints.'}
               </p>
             </div>
           </div>
           <button
             type="button"
             className="btn btn-primary btn-lg shadow-lift"
-            onClick={() => currentReq && navigate(`/app/results/${currentReq.id}`)}
+            onClick={() => searchId && navigate(`/app/results/${searchId}`)}
           >
             <span>Review {candidates.length > 0 ? candidates.length : 'Candidate'} Replacements</span>
             <ArrowRight size={16} />
@@ -393,7 +386,7 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
       )}
 
       {/* Error State */}
-      {isFailed && (
+      {(isFailed || error) && (
         <div className="error-banner">
           <AlertTriangle size={24} className="text-red" />
           <div>
@@ -402,11 +395,11 @@ export const PartSearchProgress: React.FC<{ requestId?: string }> = ({ requestId
           </div>
           <button
             type="button"
-            className="btn btn-outline btn-lg"
-            onClick={handleReset}
+            className="btn btn-primary btn-lg"
+            onClick={() => searchId && navigate(`/app/requests/new/machine`)}
           >
-            <RotateCcw size={16} />
             <span>Retry Search</span>
+            <ArrowRight size={16} />
           </button>
         </div>
       )}

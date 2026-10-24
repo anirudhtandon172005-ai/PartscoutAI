@@ -5,6 +5,14 @@ from datetime import datetime
 
 Compatibility = Literal["compatible", "partial", "incompatible", "unknown"]
 SearchStatus = Literal["queued", "running", "completed", "failed"]
+SearchStage = Literal[
+    "source_discovery",
+    "page_retrieval",
+    "attribute_extraction",
+    "normalization",
+    "validation",
+    "evidence_compilation",
+]
 
 
 class RequirementSpec(BaseModel):
@@ -26,6 +34,9 @@ class SearchCreateRequest(BaseModel):
 class SearchCreateResponse(BaseModel):
     id: str
     status: SearchStatus
+    stage: SearchStage | None = None
+    progress_percent: int = Field(ge=0, le=100, default=0)
+    stage_message: str = ""
     created_at: datetime
     completed_at: datetime | None = None
     candidate_count: int = 0
@@ -34,6 +45,9 @@ class SearchCreateResponse(BaseModel):
 class SearchStatusResponse(BaseModel):
     id: str
     status: SearchStatus
+    stage: SearchStage | None = None
+    progress_percent: int = Field(ge=0, le=100, default=0)
+    stage_message: str = ""
     request: SearchCreateRequest
     candidate_count: int = 0
     created_at: datetime
@@ -69,3 +83,18 @@ class ErrorResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+
+
+class WorkspaceSummary(BaseModel):
+    id: str
+    name: str
+    facility: str
+    role: str
+
+
+class MeResponse(BaseModel):
+    id: str
+    email: str | None = None
+    full_name: str = ""
+    facility: str = ""
+    workspaces: list[WorkspaceSummary] = []

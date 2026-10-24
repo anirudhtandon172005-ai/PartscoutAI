@@ -1,7 +1,11 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+import enum
 
+from app.db import get_db_session
+from app.db.repositories import SearchRepository, search_record_to_schema, search_candidate_to_schema
+from app.db.models import SearchStatus, SearchStage, Compatibility
 from app.schemas import (
     SearchCreateRequest,
     SearchCreateResponse,
@@ -10,44 +14,22 @@ from app.schemas import (
     CandidateListResponse,
     CandidateEvidence,
     RequirementSpec,
-    SearchStatus,
-    Compatibility,
 )
-
-
-class SearchRecord:
-    def __init__(
-        self,
-        search_id: str,
-        request: SearchCreateRequest,
-        status: SearchStatus,
-        candidates: list[CandidateResponse] | None = None,
-        created_at: datetime | None = None,
-        completed_at: datetime | None = None,
-        error: str | None = None,
-    ):
-        self.search_id = search_id
-        self.request = request
-        self.status = status
-        self.candidates = candidates or []
-        self.created_at = created_at or datetime.now(timezone.utc)
-        self.completed_at = completed_at
-        self.error = error
 
 
 class MockSearchProvider:
     """Deterministic mock provider that returns consistent candidates for the same request."""
 
-    def discover_candidates(self, request: SearchCreateRequest) -> list[CandidateResponse]:
-        return self._generate_candidates(request)
+    def discover_candidates(self, request: SearchCreateRequest, search_id: str) -> list[CandidateResponse]:
+        return self._generate_candidates(request, search_id)
 
-    def _generate_candidates(self, request: SearchCreateRequest) -> list[CandidateResponse]:
+    def _generate_candidates(self, request: SearchCreateRequest, search_id: str) -> list[CandidateResponse]:
         candidates: list[CandidateResponse] = []
 
         # Candidate 1: ifm IGT205 (best match - 96%)
         candidates.append(
             CandidateResponse(
-                id="candidate-001",
+                id=_make_candidate_id(search_id, 1),
                 part_number="IGT205",
                 manufacturer="ifm efector",
                 compatibility="compatible",
@@ -94,7 +76,7 @@ class MockSearchProvider:
         # Candidate 2: Turck Bi8U-M18 (functional equivalent - 92%)
         candidates.append(
             CandidateResponse(
-                id="candidate-002",
+                id=_make_candidate_id(search_id, 2),
                 part_number="Bi8U-M18-AP6X-H1141",
                 manufacturer="Turck",
                 compatibility="compatible",
@@ -141,7 +123,7 @@ class MockSearchProvider:
         # Candidate 3: Pepperl+Fuchs NBB8 (mounting review required - 88%)
         candidates.append(
             CandidateResponse(
-                id="candidate-003",
+                id=_make_candidate_id(search_id, 3),
                 part_number="NBB8-18GM50-E2-V1",
                 manufacturer="Pepperl+Fuchs",
                 compatibility="partial",
@@ -188,61 +170,195 @@ class MockSearchProvider:
         return candidates
 
 
-# In-memory stores
-_searches: dict[str, SearchRecord] = {}
-_candidates: dict[str, list[CandidateResponse]] = {}
 _provider = MockSearchProvider()
+
+# Stage progression
+STAGE_PROGRESSION: list[SearchStage] = [
+    SearchStage.SOURCE_DISCOVERY,
+    SearchStage.PAGE_RETRIEVAL,
+    SearchStage.ATTRIBUTE_EXTRACTION,
+    SearchStage.NORMALIZATION,
+    SearchStage.VALIDATION,
+    SearchStage.EVIDENCE_COMPILATION,
+]
+
+STAGE_MESSAGES: dict[SearchStage, str] = {
+    SearchStage.SOURCE_DISCOVERY: "Discovering candidate sources",
+    SearchStage.PAGE_RETRIEVAL: "Retrieving candidate product pages",
+    SearchStage.ATTRIBUTE_EXTRACTION: "Extracting technical attributes",
+    SearchStage.NORMALIZATION: "Normalizing specifications",
+    SearchStage.VALIDATION: "Validating against requirements",
+    SearchStage.EVIDENCE_COMPILATION: "Compiling evidence and citations",
+}
+
+STAGE_PROGRESS: dict[SearchStage, int] = {
+    SearchStage.SOURCE_DISCOVERY: 10,
+    SearchStage.PAGE_RETRIEVAL: 25,
+    SearchStage.ATTRIBUTE_EXTRACTION: 45,
+    SearchStage.NORMALIZATION: 65,
+    SearchStage.VALIDATION: 85,
+    SearchStage.EVIDENCE_COMPILATION: 95,
+}
+
+
+def _make_candidate_id(search_id: str, index: int) -> str:
+    """Generate unique candidate ID based on search ID."""
+    return f"{search_id}-cand-{index}"
 
 
 class SearchService:
-    def create_search(self, request: SearchCreateRequest) -> SearchCreateResponse:
+    async def create_search(self, request: SearchCreateRequest, user_id: str | None = None, workspace_id: str | None = None) -> SearchCreateResponse:
         search_id = f"search-{uuid.uuid4().hex[:8]}"
         now = datetime.now(timezone.utc)
 
-        # Generate candidates synchronously
-        candidates = _provider.discover_candidates(request)
-
-        # Store search record
-        record = SearchRecord(
-            search_id=search_id,
-            request=request,
-            status="completed",
-            candidates=candidates,
-            created_at=now,
-            completed_at=now,
-        )
-        _searches[search_id] = record
-        _candidates[search_id] = candidates
+        # Create initial record in queued state using repository
+        async with get_db_session() as session:
+            repo = SearchRepository(session)
+            await repo.create_search(search_id, request, user_id=user_id, workspace_id=workspace_id)
 
         return SearchCreateResponse(
             id=search_id,
-            status="completed",
+            status="queued",
+            stage=None,
+            progress_percent=0,
+            stage_message="Search queued",
             created_at=now,
-            completed_at=now,
-            candidate_count=len(candidates),
+            completed_at=None,
+            candidate_count=0,
         )
 
-    def get_search(self, search_id: str) -> SearchStatusResponse:
-        record = _searches.get(search_id)
-        if not record:
-            raise KeyError(f"Search not found: {search_id}")
+    async def advance_search(self, search_id: str):
+        """Advance the search to the next stage."""
+        async with get_db_session() as session:
+            repo = SearchRepository(session)
 
-        return SearchStatusResponse(
-            id=record.search_id,
-            status=record.status,
-            request=record.request,
-            candidate_count=len(record.candidates),
-            created_at=record.created_at,
-            completed_at=record.completed_at,
-            error=record.error,
-        )
+            record = await repo.get_search(search_id)
+            if not record:
+                return None
 
-    def get_candidates(self, search_id: str) -> CandidateListResponse:
-        if search_id not in _searches:
-            raise KeyError(f"Search not found: {search_id}")
+            if record.status == SearchStatus.QUEUED:
+                record.status = SearchStatus.RUNNING
+                record.stage = STAGE_PROGRESSION[0]
+                record.progress_percent = STAGE_PROGRESS[record.stage]
+                record.stage_message = STAGE_MESSAGES[record.stage]
+            elif record.status == SearchStatus.RUNNING and record.stage:
+                try:
+                    current_idx = STAGE_PROGRESSION.index(record.stage)
+                    if current_idx + 1 < len(STAGE_PROGRESSION):
+                        record.stage = STAGE_PROGRESSION[current_idx + 1]
+                        record.progress_percent = STAGE_PROGRESS[record.stage]
+                        record.stage_message = STAGE_MESSAGES[record.stage]
+                    else:
+                        record.status = SearchStatus.COMPLETED
+                        record.stage = STAGE_PROGRESSION[-1]
+                        record.progress_percent = 100
+                        record.stage_message = "Search completed"
+                        record.completed_at = datetime.now(timezone.utc)
+                        # Generate candidates - reconstruct request from record
+                        request = SearchCreateRequest(
+                            machine_name=record.machine_name,
+                            part_name=record.part_name,
+                            original_part_number=record.original_part_number,
+                            manufacturer=record.manufacturer,
+                            quantity=record.quantity,
+                            requirements=RequirementSpec(**record.requirements_json),
+                        )
+                        candidates = _provider.discover_candidates(request, search_id)
+                        await repo.save_candidates(search_id, candidates, workspace_id=record.workspace_id)
+                except ValueError:
+                    record.stage = STAGE_PROGRESSION[0]
+                    record.progress_percent = STAGE_PROGRESS[record.stage]
+                    record.stage_message = STAGE_MESSAGES[record.stage]
 
-        items = _candidates.get(search_id, [])
-        return CandidateListResponse(search_id=search_id, items=items)
+            await session.flush()
+            return record
+
+    async def complete_search(self, search_id: str):
+        """Complete the search immediately (for testing/demo)."""
+        async with get_db_session() as session:
+            repo = SearchRepository(session)
+
+            record = await repo.get_search(search_id)
+            if not record:
+                return None
+
+            while record.status != SearchStatus.COMPLETED:
+                # Advance within the same session
+                if record.status == SearchStatus.QUEUED:
+                    record.status = SearchStatus.RUNNING
+                    record.stage = STAGE_PROGRESSION[0]
+                    record.progress_percent = STAGE_PROGRESS[record.stage]
+                    record.stage_message = STAGE_MESSAGES[record.stage]
+                elif record.status == SearchStatus.RUNNING and record.stage:
+                    try:
+                        current_idx = STAGE_PROGRESSION.index(record.stage)
+                        if current_idx + 1 < len(STAGE_PROGRESSION):
+                            record.stage = STAGE_PROGRESSION[current_idx + 1]
+                            record.progress_percent = STAGE_PROGRESS[record.stage]
+                            record.stage_message = STAGE_MESSAGES[record.stage]
+                        else:
+                            record.status = SearchStatus.COMPLETED
+                            record.stage = STAGE_PROGRESSION[-1]
+                            record.progress_percent = 100
+                            record.stage_message = "Search completed"
+                            record.completed_at = datetime.now(timezone.utc)
+                            # Generate candidates - reconstruct request from record
+                            request = SearchCreateRequest(
+                                machine_name=record.machine_name,
+                                part_name=record.part_name,
+                                original_part_number=record.original_part_number,
+                                manufacturer=record.manufacturer,
+                                quantity=record.quantity,
+                                requirements=RequirementSpec(**record.requirements_json),
+                            )
+                            candidates = _provider.discover_candidates(request, search_id)
+                            await repo.save_candidates(search_id, candidates, workspace_id=record.workspace_id)
+                    except ValueError:
+                        record.stage = STAGE_PROGRESSION[0]
+                        record.progress_percent = STAGE_PROGRESS[record.stage]
+                        record.stage_message = STAGE_MESSAGES[record.stage]
+
+                await session.flush()
+                # Refresh record from session
+                await session.refresh(record)
+
+            return record
+
+    async def fail_search(self, search_id: str, error: str):
+        """Mark the search as failed."""
+        async with get_db_session() as session:
+            repo = SearchRepository(session)
+
+            record = await repo.get_search(search_id)
+            if not record:
+                return None
+
+            record.status = SearchStatus.FAILED
+            record.error = error
+            await session.flush()
+            return record
+
+    async def get_search(self, search_id: str, workspace_id: str | None = None) -> SearchStatusResponse:
+        async with get_db_session() as session:
+            repo = SearchRepository(session)
+
+            record = await repo.get_search(search_id, workspace_id=workspace_id)
+            if not record:
+                raise KeyError(f"Search not found: {search_id}")
+
+            return SearchStatusResponse(**search_record_to_schema(record))
+
+    async def get_candidates(self, search_id: str, workspace_id: str | None = None) -> CandidateListResponse:
+        async with get_db_session() as session:
+            repo = SearchRepository(session)
+
+            record = await repo.get_search(search_id, workspace_id=workspace_id)
+            if not record:
+                raise KeyError(f"Search not found: {search_id}")
+
+            candidates = await repo.get_candidates(search_id, workspace_id=workspace_id)
+            items = [search_candidate_to_schema(c) for c in candidates]
+            return CandidateListResponse(search_id=search_id, items=items)
 
 
 search_service = SearchService()

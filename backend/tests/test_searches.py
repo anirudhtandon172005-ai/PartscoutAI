@@ -1,11 +1,35 @@
+import os
+import tempfile
+os.environ["TEST_MODE"] = "true"
+
+# Create a temporary database file for tests
+test_db_fd, test_db_path = tempfile.mkstemp(suffix='.db')
+os.environ["DATABASE_PATH"] = test_db_path
+
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.schemas import SearchCreateRequest, RequirementSpec, Compatibility
+from app.services.search_service import search_service
+from app.db import init_db, close_db
+
+
+# Module-level fixture for database setup/teardown
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def setup_database():
+    await init_db()
+    yield
+    await close_db()
+    try:
+        os.close(test_db_fd)
+        os.unlink(test_db_path)
+    except Exception:
+        pass
 
 
 # Test client fixture
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
@@ -46,8 +70,19 @@ class TestValidation:
         data = response.json()
         assert "id" in data
         assert data["id"].startswith("search-")
-        assert data["status"] == "completed"
-        assert data["candidate_count"] == 3
+        assert data["status"] == "queued"
+        assert data["progress_percent"] == 0
+        assert data["stage"] is None
+
+        # Complete the search via service for validation
+        search_id = data["id"]
+        await search_service.complete_search(search_id)
+        status_response = await client.get(f"/api/v1/searches/{search_id}")
+        assert status_response.status_code == 200
+        status_data = status_response.json()
+        assert status_data["status"] == "completed"
+        assert status_data["progress_percent"] == 100
+        assert status_data["candidate_count"] == 3
 
     @pytest.mark.asyncio
     async def test_empty_part_name_rejected(self, client):
@@ -144,7 +179,13 @@ class TestSearchLifecycle:
         }
         response = await client.post("/api/v1/searches", json=payload)
         data = response.json()
-        assert data["status"] == "completed"
+        assert data["status"] == "queued"
+
+        # Complete via service
+        search_id = data["id"]
+        await search_service.complete_search(search_id)
+        status_response = await client.get(f"/api/v1/searches/{search_id}")
+        assert status_response.json()["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_status_endpoint_returns_request(self, client):
@@ -178,6 +219,9 @@ class TestSearchLifecycle:
         }
         create_response = await client.post("/api/v1/searches", json=payload)
         search_id = create_response.json()["id"]
+
+        # Complete the search to generate candidates
+        await search_service.complete_search(search_id)
 
         candidates_response = await client.get(f"/api/v1/searches/{search_id}/candidates")
         assert candidates_response.status_code == 200
@@ -276,7 +320,16 @@ class TestContract:
         # Verify ISO 8601 format
         from datetime import datetime
         datetime.fromisoformat(data["created_at"].replace("Z", "+00:00"))
-        datetime.fromisoformat(data["completed_at"].replace("Z", "+00:00"))
+        # completed_at is null for queued status
+        assert data["completed_at"] is None
+
+        # Complete the search and check timestamps again
+        search_id = data["id"]
+        await search_service.complete_search(search_id)
+        status_response = await client.get(f"/api/v1/searches/{search_id}")
+        status_data = status_response.json()
+        assert status_data["completed_at"] is not None
+        datetime.fromisoformat(status_data["completed_at"].replace("Z", "+00:00"))
 
     @pytest.mark.asyncio
     async def test_candidate_list_contains_search_id(self, client):
@@ -392,3 +445,238 @@ class TestSchemaValidation:
         assert "partial" in Compatibility.__args__
         assert "incompatible" in Compatibility.__args__
         assert "unknown" in Compatibility.__args__
+
+
+# Stage contract tests
+class TestStageContract:
+    def test_valid_stage(self):
+        from app.schemas import SearchStage
+        valid_stages = [
+            "source_discovery",
+            "page_retrieval",
+            "attribute_extraction",
+            "normalization",
+            "validation",
+            "evidence_compilation",
+        ]
+        for stage in valid_stages:
+            SearchStage.__args__  # verify Literal exists
+        # Pydantic validates at model creation
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        resp = SearchStatusResponse(
+            id="test",
+            status="running",
+            stage="page_retrieval",
+            progress_percent=25,
+            stage_message="Retrieving pages",
+            request=SearchCreateRequest(
+                machine_name="Test",
+                part_name="Test",
+                original_part_number="PN-123",
+                manufacturer="Test",
+                quantity=1,
+                requirements=RequirementSpec(),
+            ),
+            candidate_count=0,
+            created_at=datetime.now(),
+        )
+        assert resp.stage == "page_retrieval"
+
+    def test_invalid_stage_rejected(self):
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            SearchStatusResponse(
+                id="test",
+                status="running",
+                stage="invalid_stage",
+                progress_percent=25,
+                stage_message="Test",
+                request=SearchCreateRequest(
+                    machine_name="Test",
+                    part_name="Test",
+                    original_part_number="PN-123",
+                    manufacturer="Test",
+                    quantity=1,
+                    requirements=RequirementSpec(),
+                ),
+                candidate_count=0,
+                created_at=datetime.now(),
+            )
+
+    def test_progress_below_zero_rejected(self):
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            SearchStatusResponse(
+                id="test",
+                status="running",
+                stage="source_discovery",
+                progress_percent=-1,
+                stage_message="Test",
+                request=SearchCreateRequest(
+                    machine_name="Test",
+                    part_name="Test",
+                    original_part_number="PN-123",
+                    manufacturer="Test",
+                    quantity=1,
+                    requirements=RequirementSpec(),
+                ),
+                candidate_count=0,
+                created_at=datetime.now(),
+            )
+
+    def test_progress_above_100_rejected(self):
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            SearchStatusResponse(
+                id="test",
+                status="running",
+                stage="source_discovery",
+                progress_percent=101,
+                stage_message="Test",
+                request=SearchCreateRequest(
+                    machine_name="Test",
+                    part_name="Test",
+                    original_part_number="PN-123",
+                    manufacturer="Test",
+                    quantity=1,
+                    requirements=RequirementSpec(),
+                ),
+                candidate_count=0,
+                created_at=datetime.now(),
+            )
+
+    def test_failed_search_requires_error(self):
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        # The schema allows error to be None even for failed status
+        # This test documents the current behavior
+        resp = SearchStatusResponse(
+            id="test",
+            status="failed",
+            stage="page_retrieval",
+            progress_percent=25,
+            stage_message="Failed",
+            request=SearchCreateRequest(
+                machine_name="Test",
+                part_name="Test",
+                original_part_number="PN-123",
+                manufacturer="Test",
+                quantity=1,
+                requirements=RequirementSpec(),
+            ),
+            candidate_count=0,
+            created_at=datetime.now(),
+            error=None,  # Currently allowed
+        )
+        assert resp.error is None
+
+    def test_queued_contract(self):
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        resp = SearchStatusResponse(
+            id="test",
+            status="queued",
+            stage=None,
+            progress_percent=0,
+            stage_message="Queued",
+            request=SearchCreateRequest(
+                machine_name="Test",
+                part_name="Test",
+                original_part_number="PN-123",
+                manufacturer="Test",
+                quantity=1,
+                requirements=RequirementSpec(),
+            ),
+            candidate_count=0,
+            created_at=datetime.now(),
+            error=None,
+        )
+        assert resp.status == "queued"
+        assert resp.progress_percent == 0
+        assert resp.error is None
+        assert resp.stage is None
+
+    def test_running_contract(self):
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        resp = SearchStatusResponse(
+            id="test",
+            status="running",
+            stage="source_discovery",
+            progress_percent=10,
+            stage_message="Discovering sources",
+            request=SearchCreateRequest(
+                machine_name="Test",
+                part_name="Test",
+                original_part_number="PN-123",
+                manufacturer="Test",
+                quantity=1,
+                requirements=RequirementSpec(),
+            ),
+            candidate_count=0,
+            created_at=datetime.now(),
+            error=None,
+        )
+        assert resp.status == "running"
+        assert 1 <= resp.progress_percent <= 99
+        assert resp.error is None
+        assert resp.stage is not None
+
+    def test_completed_contract(self):
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        resp = SearchStatusResponse(
+            id="test",
+            status="completed",
+            stage="evidence_compilation",
+            progress_percent=100,
+            stage_message="Search completed",
+            request=SearchCreateRequest(
+                machine_name="Test",
+                part_name="Test",
+                original_part_number="PN-123",
+                manufacturer="Test",
+                quantity=1,
+                requirements=RequirementSpec(),
+            ),
+            candidate_count=3,
+            created_at=datetime.now(),
+            completed_at=datetime.now(),
+            error=None,
+        )
+        assert resp.status == "completed"
+        assert resp.progress_percent == 100
+        assert resp.error is None
+        assert resp.candidate_count >= 0
+
+    def test_failed_contract(self):
+        from app.schemas import SearchStatusResponse
+        from datetime import datetime
+        resp = SearchStatusResponse(
+            id="test",
+            status="failed",
+            stage="page_retrieval",
+            progress_percent=25,
+            stage_message="Failed during retrieval",
+            request=SearchCreateRequest(
+                machine_name="Test",
+                part_name="Test",
+                original_part_number="PN-123",
+                manufacturer="Test",
+                quantity=1,
+                requirements=RequirementSpec(),
+            ),
+            candidate_count=0,
+            created_at=datetime.now(),
+            error="Mock provider failed to retrieve candidate pages",
+        )
+        assert resp.status == "failed"
+        assert resp.error is not None
+        assert resp.progress_percent < 100

@@ -175,7 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                       <Activity size={14} />
                     )}
                     {navItem(
-                      '/app/parts/part-ifm-igt205',
+                      `/app/results/${activeRequestId}`,
                       'Part 3D Digital Twin',
                       <PackageCheck size={14} />
                     )}
@@ -206,12 +206,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                 {openSections.specs && (
                   <div className="dropdown-items-panel">
                     {navItem(
-                      '/app/compare/part-ifm-igt205',
+                      `/app/results/${activeRequestId}`,
                       'Side-by-Side Tolerance Audit',
                       <Scale size={14} />
                     )}
                     {navItem(
-                      '/app/parts/part-ifm-igt205',
+                      `/app/results/${activeRequestId}`,
                       'Interactive CAD Inspector',
                       <Wrench size={14} />
                     )}
@@ -243,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                 {openSections.procurement && (
                   <div className="dropdown-items-panel">
                     {navItem(
-                      '/app/availability/part-ifm-igt205',
+                      `/app/results/${activeRequestId}`,
                       'Distributor Stock & Feeds',
                       <CheckSquare size={14} />
                     )}

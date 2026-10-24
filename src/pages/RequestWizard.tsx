@@ -9,10 +9,7 @@ import {
   Building,
   Cpu,
   FileCheck2,
-  Layers,
   Sparkles,
-  HelpCircle,
-  RotateCcw,
 } from 'lucide-react';
 
 interface RequestWizardProps {
@@ -31,6 +28,7 @@ export const RequestWizard: React.FC<RequestWizardProps> = ({ step }) => {
   } = useApp();
 
   const [useCustomMachine, setUseCustomMachine] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Validation helpers
   const isMachineValid = useCustomMachine
@@ -61,12 +59,15 @@ export const RequestWizard: React.FC<RequestWizardProps> = ({ step }) => {
   };
 
   const handleFinalSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
-      const newRequestId = await submitDraftRequest();
-      navigate(`/app/search/${newRequestId}`);
+      const searchId = await submitDraftRequest();
+      navigate(`/app/search/${searchId}`);
     } catch (error) {
-      // Error toast already shown in submitDraftRequest
       console.error('Failed to submit draft request:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -520,9 +521,19 @@ export const RequestWizard: React.FC<RequestWizardProps> = ({ step }) => {
                 type="button"
                 className="btn btn-primary btn-lg shadow-lift"
                 onClick={handleFinalSubmit}
+                disabled={isSubmitting}
               >
-                <span>Initiate Intelligent Part Search</span>
-                <ArrowRight size={16} />
+                {isSubmitting ? (
+                  <>
+                    <span className="spinner-sm mr-2" />
+                    <span>Initiating Search...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Initiate Intelligent Part Search</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
               </button>
             </div>
           </div>

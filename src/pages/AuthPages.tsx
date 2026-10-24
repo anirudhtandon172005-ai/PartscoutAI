@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ShieldCheck, User, Lock, Mail, ArrowRight, Building, CheckCircle2 } from 'lucide-react';
+import { User, Lock, Mail, ArrowRight, Building } from 'lucide-react';
 import { DemoBadge } from '../components/DemoBadge';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
 interface AuthPageProps {
   mode: 'login' | 'signup';
@@ -14,14 +15,47 @@ export const AuthPages: React.FC<AuthPageProps> = ({ mode }) => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [facility, setFacility] = useState('Apex PackWorks - Main Plant');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addToast(
-      mode === 'login' ? 'Signed In' : 'Account Created',
-      `Welcome to PartScout AI prototype workspace.`,
-      'success'
-    );
+    setFormError('');
+
+    if (!isSupabaseConfigured || !supabase) {
+      setFormError('Supabase Auth is not configured. Add the VITE_SUPABASE_* values to your local environment.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    let result;
+    try {
+      result = mode === 'login'
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: name, facility } },
+          });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Unable to connect to Supabase Auth.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
+    if (result.error) {
+      setFormError(result.error.message);
+      return;
+    }
+
+    if (mode === 'signup' && !result.data.session) {
+      addToast('Check Your Email', 'Confirm your email address before signing in.', 'info');
+      navigate('/login');
+      return;
+    }
+
+    addToast('Signed In', 'Welcome to your PartScout AI workspace.', 'success');
     navigate('/app/dashboard');
   };
 
@@ -173,9 +207,10 @@ export const AuthPages: React.FC<AuthPageProps> = ({ mode }) => {
             )}
 
             <button type="submit" className="btn btn-primary btn-block btn-lg">
-              <span>{mode === 'login' ? 'Sign In to Workspace' : 'Create Account'}</span>
+              <span>{isSubmitting ? 'Connecting…' : mode === 'login' ? 'Sign In to Workspace' : 'Create Account'}</span>
               <ArrowRight size={16} />
             </button>
+            {formError && <p className="form-error" role="alert">{formError}</p>}
           </form>
 
           <div className="auth-footer">
@@ -207,7 +242,7 @@ export const AuthPages: React.FC<AuthPageProps> = ({ mode }) => {
 
         <div className="auth-disclaimer">
           <DemoBadge variant="inline" customText="Prototype Simulation" lastChecked="Local Auth State" />
-          <span>Demo authentication operates locally in browser storage. No external telemetry sent.</span>
+          <span>Credentials are handled by Supabase Auth. Quick persona access remains available for prototype review.</span>
         </div>
       </div>
     </div>

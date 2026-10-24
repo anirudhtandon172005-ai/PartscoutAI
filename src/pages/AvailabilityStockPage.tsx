@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
+import { DEMO_SEARCH_ID } from '../data/mockData';
 import {
   CheckSquare,
   AlertTriangle,
@@ -60,7 +61,7 @@ export const AvailabilityStockPage: React.FC<{ partId?: string }> = ({ partId = 
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => navigate(`/app/compare/${component.id}`)}
+            onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/${component.id}`)}
           >
             <Scale size={15} />
             <span>Compare Specs</span>

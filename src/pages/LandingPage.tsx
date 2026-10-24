@@ -30,6 +30,7 @@ import {
   Sparkles,
   Award
 } from 'lucide-react';
+import { DEMO_SEARCH_ID } from '../data/mockData';
 
 export const LandingPage: React.FC = () => {
   const { navigate, targetPart, candidates, setActiveEvidence, addToast } = useApp();
@@ -44,18 +45,18 @@ export const LandingPage: React.FC = () => {
     if (searchQuery.trim().length > 0) {
       addToast('Search Initialized', `Querying industrial catalogs for "${searchQuery}"...`, 'info');
     }
-    navigate('/app/results/req-line4-sensor');
+    navigate(`/app/results/${DEMO_SEARCH_ID}`);
   };
 
   const categories = [
-    { name: 'Proximity Sensors', icon: '⚡', count: '14,200+ parts', path: '/app/results/req-line4-sensor' },
-    { name: 'Photoelectric & Laser', icon: '🔦', count: '8,400+ parts', path: '/app/results/req-line4-sensor' },
-    { name: 'Pneumatic Valves', icon: '💨', count: '12,900+ parts', path: '/app/results/req-line4-sensor' },
-    { name: 'PLC & I/O Modules', icon: '🎛️', count: '6,700+ parts', path: '/app/results/req-line4-sensor' },
-    { name: 'Motors & VFD Inverters', icon: '⚙️', count: '5,300+ parts', path: '/app/results/req-line4-sensor' },
-    { name: 'Industrial Cables & M12', icon: '🔌', count: '19,100+ parts', path: '/app/results/req-line4-sensor' },
-    { name: 'Bearings & Couplings', icon: '🔄', count: '22,000+ parts', path: '/app/results/req-line4-sensor' },
-    { name: 'Safety Relays & Curtains', icon: '🛡️', count: '4,100+ parts', path: '/app/results/req-line4-sensor' },
+    { name: 'Proximity Sensors', icon: '⚡', count: '14,200+ parts', path: `/app/results/${DEMO_SEARCH_ID}` },
+    { name: 'Photoelectric & Laser', icon: '🔦', count: '8,400+ parts', path: `/app/results/${DEMO_SEARCH_ID}` },
+    { name: 'Pneumatic Valves', icon: '💨', count: '12,900+ parts', path: `/app/results/${DEMO_SEARCH_ID}` },
+    { name: 'PLC & I/O Modules', icon: '🎛️', count: '6,700+ parts', path: `/app/results/${DEMO_SEARCH_ID}` },
+    { name: 'Motors & VFD Inverters', icon: '⚙️', count: '5,300+ parts', path: `/app/results/${DEMO_SEARCH_ID}` },
+    { name: 'Industrial Cables & M12', icon: '🔌', count: '19,100+ parts', path: `/app/results/${DEMO_SEARCH_ID}` },
+    { name: 'Bearings & Couplings', icon: '🔄', count: '22,000+ parts', path: `/app/results/${DEMO_SEARCH_ID}` },
+    { name: 'Safety Relays & Curtains', icon: '🛡️', count: '4,100+ parts', path: `/app/results/${DEMO_SEARCH_ID}` },
   ];
 
   const featuredParts = [
@@ -238,7 +239,7 @@ export const LandingPage: React.FC = () => {
               <button
                 type="button"
                 className="chip-item"
-                onClick={() => navigate('/app/compare/part-ifm-igt205')}
+                onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/part-ifm-igt205`)}
               >
                 Balluff BES 516 Drop-in
               </button>
@@ -390,7 +391,7 @@ export const LandingPage: React.FC = () => {
                   <button
                     type="button"
                     className="btn btn-secondary btn-lg"
-                    onClick={() => navigate('/app/compare/part-ifm-igt205')}
+                    onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/part-ifm-igt205`)}
                   >
                     <Scale size={16} />
                     <span>Inspect Side-by-Side Spec Matrix</span>
@@ -495,7 +496,7 @@ export const LandingPage: React.FC = () => {
                   <button
                     type="button"
                     className="btn btn-primary btn-block"
-                    onClick={() => navigate(`/app/compare/${part.id}`)}
+                    onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/${part.id}`)}
                   >
                     <Scale size={14} />
                     <span>Compare Specifications</span>
@@ -504,7 +505,7 @@ export const LandingPage: React.FC = () => {
                   <button
                     type="button"
                     className="btn btn-outline btn-block"
-                    onClick={() => navigate(`/app/parts/${part.id}`)}
+                    onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/parts/${part.id}`)}
                   >
                     <span>Inspect 3D Digital Twin</span>
                     <ChevronRight size={14} />
@@ -776,7 +777,7 @@ export const LandingPage: React.FC = () => {
               <h5 className="footer-col-title">Engineering Tools</h5>
               <ul className="footer-links-list">
                 <li><a onClick={() => navigate('/app/requests/new/machine')}>Request Wizard</a></li>
-                <li><a onClick={() => navigate('/app/compare/part-ifm-igt205')}>Specification Matrix</a></li>
+                <li><a onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/part-ifm-igt205`)}>Specification Matrix</a></li>
                 <li><a onClick={() => navigate('/app/quotes')}>Quotation Management</a></li>
                 <li><a onClick={() => navigate('/app/suppliers')}>Supplier Directory</a></li>
                 <li><a onClick={() => navigate('/admin/dashboard')}>Admin Operations</a></li>

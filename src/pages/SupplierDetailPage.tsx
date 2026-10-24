@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
+import { DEMO_SEARCH_ID } from '../data/mockData';
 import {
   Building2,
   ExternalLink,
@@ -215,7 +216,7 @@ export const SupplierDetailPage: React.FC<{ supplierId?: string }> = ({ supplier
                           <button
                             type="button"
                             className="btn btn-outline btn-xs"
-                            onClick={() => navigate(`/app/parts/${offer.partId}`)}
+                            onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/parts/${offer.partId}`)}
                           >
                             <span>Inspect 3D</span>
                           </button>

@@ -25,10 +25,18 @@ import { ProfileSettingsPage } from './pages/ProfileSettingsPage';
 import { AdminPages } from './pages/AdminPages';
 
 const AppRouter: React.FC = () => {
-  const { currentRoute } = useApp();
+  const { currentRoute, authReady, isAuthenticated, navigate } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isPublic = currentRoute === '/' || currentRoute === '/login' || currentRoute === '/signup';
+
+  React.useEffect(() => {
+    if (authReady && !isAuthenticated && !isPublic && import.meta.env.VITE_DEMO_MODE !== 'true') {
+      navigate('/login');
+    }
+  }, [authReady, isAuthenticated, isPublic, navigate]);
+
+  if (!authReady) return <div className="app-loading">Loading secure workspace…</div>;
 
   // Parse route parameters
   const renderRouteContent = () => {
@@ -55,22 +63,29 @@ const AppRouter: React.FC = () => {
     if (currentRoute === '/app/requests/new/review') {
       return <RequestWizard step="review" />;
     }
+    if (currentRoute.startsWith('/app/search/') && currentRoute.includes('/parts/')) {
+      const parts = currentRoute.split('/');
+      const searchId = parts[2];
+      const candidateId = parts[4];
+      return <PartDetailPage searchId={searchId} candidateId={candidateId} />;
+    }
+    if (currentRoute.startsWith('/app/search/') && currentRoute.includes('/compare/')) {
+      const parts = currentRoute.split('/');
+      const searchId = parts[2];
+      const candidateId = parts[4];
+      return <ReplacementComparisonPage searchId={searchId} candidateId={candidateId} />;
+    }
     if (currentRoute.startsWith('/app/search/')) {
       const id = currentRoute.replace('/app/search/', '');
-      return <PartSearchProgress requestId={id} />;
+      return <PartSearchProgress searchId={id} />;
     }
     if (currentRoute.startsWith('/app/results/')) {
       const id = currentRoute.replace('/app/results/', '');
-      return <SearchResultsPage requestId={id} />;
+      return <SearchResultsPage searchId={id} />;
     }
-    if (currentRoute.startsWith('/app/parts/')) {
-      const id = currentRoute.replace('/app/parts/', '');
-      return <PartDetailPage partId={id} />;
-    }
-    if (currentRoute.startsWith('/app/compare/')) {
-      const id = currentRoute.replace('/app/compare/', '');
-      return <ReplacementComparisonPage candidateId={id} />;
-    }
+    // Legacy routes removed - all part detail and comparison now require searchId
+    // if (currentRoute.startsWith('/app/parts/')) { ... }
+    // if (currentRoute.startsWith('/app/compare/')) { ... }
     if (currentRoute === '/app/suppliers') {
       return <SupplierDirectoryPage />;
     }
