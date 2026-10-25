@@ -3241,6 +3241,57 @@ h1, h2, h3, h4, h5, h6 {
   margin-top: 0.15rem;
 }
 
+.social-auth-box {
+  margin-bottom: 0.75rem;
+}
+
+.btn-google-sso {
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  background: #FFFFFF;
+  color: #1E293B;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.btn-google-sso:hover:not(:disabled) {
+  background: #F8FAFC;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(66, 133, 244, 0.5);
+}
+
+.btn-google-sso:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-google-sso:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.google-icon {
+  flex-shrink: 0;
+}
+
+.spinner-sm {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(30, 41, 59, 0.2);
+  border-top-color: #1E293B;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
 .auth-divider {
   display: flex;
   align-items: center;

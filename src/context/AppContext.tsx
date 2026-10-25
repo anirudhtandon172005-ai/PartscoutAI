@@ -209,12 +209,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync route with URL hash for easy bookmarking and refresh
   const [currentRoute, setCurrentRoute] = useState<string>(() => {
     const hash = window.location.hash.replace(/^#/, '');
+    if (hash.startsWith('access_token=') || hash.startsWith('error=')) {
+      return '/app/dashboard';
+    }
     return hash || '/';
   });
 
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace(/^#/, '');
+      if (hash.startsWith('access_token=') || hash.startsWith('error=')) {
+        return;
+      }
       if (hash && hash !== currentRoute) {
         setCurrentRoute(hash);
       } else if (!hash && currentRoute !== '/') {
@@ -367,6 +373,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSavedPartIds([]);
       } else if (session) {
         setAuthUser(session.user);
+        const hasAuthHash = window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token=');
+        const hasAuthQuery = window.location.search.includes('code=');
+        const isAuthRoute = window.location.hash === '#/login' || window.location.hash === '#/signup' || window.location.hash === '' || window.location.hash === '#/';
+
+        if (hasAuthHash || hasAuthQuery || isAuthRoute) {
+          if (hasAuthHash || hasAuthQuery) {
+            window.history.replaceState({}, document.title, window.location.pathname + '#/app/dashboard');
+          }
+          setCurrentRoute('/app/dashboard');
+          window.location.hash = '/app/dashboard';
+        }
       }
       setAuthReady(true);
     });
