@@ -15,7 +15,9 @@ import {
   FileText,
   FileCheck2,
   Zap,
+  Award,
 } from 'lucide-react';
+import { RankingAuditModal } from '../components/RankingAuditModal';
 
 function getCategoryStandard(category?: string, name?: string): string {
   const combined = `${category || ''} ${name || ''}`.toLowerCase();
@@ -34,6 +36,7 @@ export const PartDetailPage: React.FC<{ partId?: string }> = ({ partId = 'part-i
   const component = allParts.find((p) => p.id === partId) || allParts[1];
   const isSaved = isPartSaved(component.id);
   const isBaseline = component.id === targetPart.id;
+  const [showAuditModal, setShowAuditModal] = React.useState(false);
 
   return (
     <div className="part-detail-root">
@@ -60,6 +63,17 @@ export const PartDetailPage: React.FC<{ partId?: string }> = ({ partId = 'part-i
         </div>
 
         <div className="detail-actions-group">
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ borderColor: 'rgba(45, 212, 191, 0.45)', color: '#2dd4bf' }}
+            onClick={() => setShowAuditModal(true)}
+            title="Inspect 15-parameter algorithmic ranking audit"
+          >
+            <Award size={16} className="text-teal" />
+            <span>15-Param Audit</span>
+          </button>
+
           <button
             type="button"
             className={`btn ${isSaved ? 'btn-secondary' : 'btn-outline'}`}
@@ -256,6 +270,12 @@ export const PartDetailPage: React.FC<{ partId?: string }> = ({ partId = 'part-i
           </div>
         </div>
       </div>
+
+      <RankingAuditModal
+        candidate={component}
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+      />
     </div>
   );
 };

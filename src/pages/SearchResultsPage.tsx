@@ -22,12 +22,15 @@ import {
   Globe,
   Radio,
   Database,
-  Check,
   RefreshCw,
+  Check,
+  Award,
 } from 'lucide-react';
 import { getCandidates, CandidateResponse, CandidateEvidence } from '../api/searches';
 import { CANDIDATE_COMPONENTS } from '../data/mockData';
 import { SPECIFIC_INDUSTRIAL_SOURCES, scrapeSpecificSource, SpecificSource } from '../api/crawler';
+import { RankingAuditModal } from '../components/RankingAuditModal';
+import { RankingMethodologyModal } from '../components/RankingMethodologyModal';
 
 type CompatibilityResult = 'match' | 'mismatch' | 'unknown' | 'review';
 
@@ -390,6 +393,10 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
   const [scrapeLiveResult, setScrapeLiveResult] = useState<any | null>(null);
   const [showTargetedDrawer, setShowTargetedDrawer] = useState(false);
 
+  // 15-Parameter Ranking Evaluation state
+  const [auditCandidate, setAuditCandidate] = useState<any | null>(null);
+  const [showMethodologyModal, setShowMethodologyModal] = useState<boolean>(false);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -597,6 +604,17 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
         </div>
 
         <div className="results-top-actions">
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => setShowMethodologyModal(true)}
+            title="View the 15 parameters for ranking industrial parts & websites"
+            style={{ borderColor: 'rgba(45, 212, 191, 0.45)', color: '#2dd4bf' }}
+          >
+            <Award size={16} className="text-teal" />
+            <span>15 Ranking Parameters</span>
+          </button>
+
           <button
             type="button"
             className="btn btn-secondary"
@@ -966,6 +984,26 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
                   >
                     {guardResult.blocked ? 'Blocked by Guardrail' : candidate.overallStatus}
                   </span>
+
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-outline mt-2"
+                    style={{
+                      fontSize: '0.72rem',
+                      padding: '0.22rem 0.55rem',
+                      borderColor: 'rgba(45, 212, 191, 0.45)',
+                      color: '#2dd4bf',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      borderRadius: '6px',
+                    }}
+                    onClick={() => setAuditCandidate(candidate)}
+                    title="Audit candidate across all 15 industrial ranking parameters"
+                  >
+                    <Award size={12} className="text-teal" />
+                    <span>15-Param Audit</span>
+                  </button>
                 </div>
 
                 {/* Center: Component Specs & Details */}
@@ -1091,6 +1129,17 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
                   <div className="candidate-card-actions">
                     <button
                       type="button"
+                      className="btn btn-outline btn-sm"
+                      style={{ borderColor: 'rgba(45, 212, 191, 0.45)', color: '#2dd4bf' }}
+                      onClick={() => setAuditCandidate(candidate)}
+                      title="Inspect 15-parameter algorithmic evaluation score"
+                    >
+                      <Award size={14} className="text-teal" />
+                      <span>15-Param Score</span>
+                    </button>
+
+                    <button
+                      type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() => navigate(`/app/compare/${candidate.id}`)}
                     >
@@ -1122,6 +1171,18 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
           })
         )}
       </div>
+
+      {/* 15-Parameter Ranking Evaluation Modals */}
+      <RankingAuditModal
+        candidate={auditCandidate}
+        isOpen={!!auditCandidate}
+        onClose={() => setAuditCandidate(null)}
+      />
+
+      <RankingMethodologyModal
+        isOpen={showMethodologyModal}
+        onClose={() => setShowMethodologyModal(false)}
+      />
     </div>
   );
 };

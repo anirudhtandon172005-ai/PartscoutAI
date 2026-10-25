@@ -49,6 +49,17 @@ class CandidateEvidence(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+class ParameterEvaluation(BaseModel):
+    parameter_id: str
+    number: int
+    name: str
+    weight: int
+    score: int
+    weighted_score: float
+    finding: str
+    category: str
+
+
 class CandidateResponse(BaseModel):
     id: str
     part_number: str
@@ -57,6 +68,7 @@ class CandidateResponse(BaseModel):
     score: int = Field(ge=0, le=100)
     specifications: dict[str, object]
     evidence: list[CandidateEvidence]
+    evaluation_parameters: Optional[list[ParameterEvaluation]] = None
 
 
 class CandidateListResponse(BaseModel):

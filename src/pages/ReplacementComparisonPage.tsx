@@ -17,7 +17,9 @@ import {
   ShieldAlert,
   Sparkles,
   PlusCircle,
+  Award,
 } from 'lucide-react';
+import { evaluate15Parameters } from '../data/rankingParameters';
 
 export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ candidateId = 'part-ifm-igt205' }) => {
   const {
@@ -36,6 +38,9 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
 
   const guardResult = evaluateCandidateGuardrails(candidate, 'mach-rf480-line4');
   const isSaved = isPartSaved(candidate.id);
+
+  const [activeViewTab, setActiveViewTab] = useState<'15params' | 'matrix'>('15params');
+  const audit15 = evaluate15Parameters(candidate);
 
   // Group specs by category
   const categories = ['Mechanical', 'Sensing', 'Electrical', 'Environmental'] as const;
@@ -238,78 +243,249 @@ export const ReplacementComparisonPage: React.FC<{ candidateId?: string }> = ({ 
         </div>
       </div>
 
-      {/* Main Side-by-Side Detailed Specification Table */}
+      {/* View Selector: 15-Parameter Ranking Audit vs Raw Technical Specs */}
       <div className="panel-card mt-6">
-        <div className="panel-header">
-          <div className="panel-title-group">
-            <Scale size={18} className="text-teal" />
-            <h3 className="panel-title">Detailed Parameter Verification Table</h3>
+        <div className="panel-header" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div className="panel-title-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Award size={18} className="text-teal" />
+            <h3 className="panel-title">
+              {activeViewTab === '15params'
+                ? '15 Parameters for Ranking Industrial Parts & Replacements (100% Total Weight)'
+                : 'Detailed Parametric Tolerance Table'}
+            </h3>
           </div>
-          <div className="table-legend">
-            <span className="legend-item"><span className="dot dot-teal"></span> Exact Match</span>
-            <span className="legend-item"><span className="dot dot-amber"></span> Review / Tolerance Alert</span>
-            <span className="legend-item"><span className="dot dot-red"></span> Critical Mismatch</span>
+
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              type="button"
+              className={`btn btn-xs ${activeViewTab === '15params' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setActiveViewTab('15params')}
+            >
+              <Award size={13} />
+              <span>15-Parameter Ranking Audit (100%)</span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${activeViewTab === 'matrix' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setActiveViewTab('matrix')}
+            >
+              <Scale size={13} />
+              <span>Raw Parameter Specs Table</span>
+            </button>
           </div>
         </div>
 
-        <div className="comparison-table-wrapper">
-          <table className="engineering-table comparison-matrix-table">
-            <thead>
-              <tr>
-                <th style={{ width: '22%' }}>Technical Requirement</th>
-                <th style={{ width: '22%' }}>Original ({targetPart.partNumber})</th>
-                <th style={{ width: '22%' }}>Candidate ({candidate.partNumber})</th>
-                <th style={{ width: '14%' }}>Result</th>
-                <th style={{ width: '20%' }}>Engineering Explanation & Evidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {candidate.specifications.map((spec, idx) => (
-                <tr key={idx} className={spec.critical ? 'row-critical' : ''}>
-                  <td>
-                    <div className="spec-req-name">
-                      {spec.name}
-                      {spec.critical && (
-                        <span className="critical-tag" title="Critical requirement for physical fit or electrical safety">
-                          Critical
+        {activeViewTab === '15params' ? (
+          <div style={{ background: 'linear-gradient(145deg, #0b1120 0%, #0f172a 100%)', borderRadius: '14px', border: '1px solid rgba(45, 212, 191, 0.3)', overflow: 'hidden' }}>
+            {/* Category Score Highlights */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gap: '0.75rem',
+                padding: '1.25rem 1.5rem',
+                background: 'rgba(15, 23, 42, 0.85)',
+                borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
+              }}
+            >
+              <div style={{ background: 'rgba(20, 184, 166, 0.15)', border: '1px solid #14b8a6', borderRadius: '10px', padding: '0.85rem' }}>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, display: 'block' }}>
+                  Total Ranking Score
+                </span>
+                <strong style={{ fontSize: '1.35rem', color: '#2dd4bf', fontFamily: 'monospace' }}>
+                  {audit15.totalScore}% (100 Points Max)
+                </strong>
+              </div>
+
+              <div style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(148, 163, 184, 0.25)', borderRadius: '10px', padding: '0.85rem' }}>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, display: 'block' }}>
+                  Technical & Engineering (46%)
+                </span>
+                <strong style={{ fontSize: '1.15rem', color: '#5eead4', fontFamily: 'monospace' }}>
+                  {audit15.categoryTotals['Technical & Engineering'].points} / 46.0 pts
+                </strong>
+              </div>
+
+              <div style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(148, 163, 184, 0.25)', borderRadius: '10px', padding: '0.85rem' }}>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, display: 'block' }}>
+                  Commercial & Logistics (30%)
+                </span>
+                <strong style={{ fontSize: '1.15rem', color: '#38bdf8', fontFamily: 'monospace' }}>
+                  {audit15.categoryTotals['Commercial & Logistics'].points} / 30.0 pts
+                </strong>
+              </div>
+
+              <div style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(148, 163, 184, 0.25)', borderRadius: '10px', padding: '0.85rem' }}>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, display: 'block' }}>
+                  Data Quality & Provenance (24%)
+                </span>
+                <strong style={{ fontSize: '1.15rem', color: '#a78bfa', fontFamily: 'monospace' }}>
+                  {audit15.categoryTotals['Data Quality & Provenance'].points} / 24.0 pts
+                </strong>
+              </div>
+            </div>
+
+            {/* 15 Parameters Table */}
+            <div className="comparison-table-wrapper" style={{ margin: 0, border: 'none', background: 'transparent' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#0F172A', borderBottom: '1px solid rgba(148, 163, 184, 0.25)' }}>
+                    <th style={{ width: '45px', padding: '1rem', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', fontFamily: 'monospace' }}>#</th>
+                    <th style={{ width: '22%', padding: '1rem', color: '#F8FAFC', fontSize: '0.78rem', textTransform: 'uppercase', fontFamily: 'monospace' }}>Parameter</th>
+                    <th style={{ width: '10%', padding: '1rem', textAlign: 'center', color: '#F8FAFC', fontSize: '0.78rem', textTransform: 'uppercase', fontFamily: 'monospace' }}>Weight</th>
+                    <th style={{ width: '28%', padding: '1rem', color: '#F8FAFC', fontSize: '0.78rem', textTransform: 'uppercase', fontFamily: 'monospace' }}>What We Evaluate</th>
+                    <th style={{ width: '14%', padding: '1rem', textAlign: 'right', color: '#F8FAFC', fontSize: '0.78rem', textTransform: 'uppercase', fontFamily: 'monospace' }}>Score & Points</th>
+                    <th style={{ width: '24%', padding: '1rem', color: '#F8FAFC', fontSize: '0.78rem', textTransform: 'uppercase', fontFamily: 'monospace' }}>Candidate Finding & Evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {audit15.results.map((r, index) => (
+                    <tr
+                      key={r.parameter.id}
+                      style={{
+                        background: index % 2 === 0 ? 'rgba(15, 23, 42, 0.85)' : 'rgba(30, 41, 59, 0.6)',
+                        borderBottom: '1px solid rgba(148, 163, 184, 0.12)',
+                      }}
+                    >
+                      <td style={{ padding: '1rem', fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8' }}>
+                        #{r.parameter.number}
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <strong style={{ color: '#ffffff', fontSize: '0.92rem', display: 'block' }}>{r.parameter.name}</strong>
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                          {r.parameter.category}
                         </span>
-                      )}
-                    </div>
-                    <span className="spec-cat-label text-muted-xs">{spec.category}</span>
-                  </td>
-
-                  <td className="tech-font font-medium original-val-cell">
-                    {spec.originalValue}
-                  </td>
-
-                  <td className="tech-font font-semibold candidate-val-cell">
-                    {spec.candidateValue}
-                  </td>
-
-                  <td>{getStatusBadge(spec.result)}</td>
-
-                  <td>
-                    <p className="spec-explanation">{spec.explanation}</p>
-                    {spec.evidenceId && (
-                      <button
-                        type="button"
-                        className="btn-link-action mt-1"
-                        onClick={() => {
-                          const ev = candidate.evidence.find((e) => e.id === spec.evidenceId) || candidate.evidence[0];
-                          if (ev) setActiveEvidence(ev);
+                      </td>
+                      <td style={{ padding: '1rem', textAlign: 'center' }}>
+                        <span
+                          style={{
+                            background: 'rgba(13, 148, 136, 0.25)',
+                            border: '1px solid #14b8a6',
+                            color: '#2dd4bf',
+                            fontWeight: 700,
+                            fontFamily: 'monospace',
+                            fontSize: '0.82rem',
+                            padding: '0.2rem 0.55rem',
+                            borderRadius: '6px',
+                            display: 'inline-block',
+                          }}
+                        >
+                          {r.parameter.weight}%
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem', color: '#cbd5e1', fontSize: '0.84rem', lineHeight: 1.45 }}>
+                        {r.parameter.whatWeEvaluate}
+                      </td>
+                      <td style={{ padding: '1rem', textAlign: 'right' }}>
+                        <strong style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: '1.05rem', display: 'block' }}>
+                          {r.score}%
+                        </strong>
+                        <span style={{ color: '#2dd4bf', fontSize: '0.78rem', fontWeight: 600 }}>
+                          +{r.weightedScore} / {r.parameter.weight} pts
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem', fontSize: '0.82rem', color: '#e2e8f0', lineHeight: 1.4 }}>
+                        {r.finding}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: 'rgba(20, 184, 166, 0.2)', fontWeight: 700, borderTop: '2px solid #14b8a6' }}>
+                    <td colSpan={2} style={{ padding: '1rem', color: '#ffffff', fontSize: '0.95rem' }}>
+                      Total Evaluation Weight
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      <span
+                        style={{
+                          background: '#14b8a6',
+                          color: '#ffffff',
+                          fontWeight: 800,
+                          fontFamily: 'monospace',
+                          fontSize: '0.88rem',
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '9999px',
                         }}
                       >
-                        <ShieldCheck size={11} className="text-teal" />
-                        <span>Inspect Datasheet Evidence</span>
-                        <ExternalLink size={10} />
-                      </button>
-                    )}
-                  </td>
+                        100%
+                      </span>
+                    </td>
+                    <td style={{ padding: '1rem', color: '#cbd5e1', fontSize: '0.85rem' }}>
+                      Exact sum across all 15 technical, commercial, and provenance ranking parameters.
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'right' }}>
+                      <strong style={{ color: '#2dd4bf', fontFamily: 'monospace', fontSize: '1.15rem' }}>
+                        {audit15.totalScore} / 100 pts
+                      </strong>
+                    </td>
+                    <td style={{ padding: '1rem', color: '#94a3b8', fontSize: '0.8rem' }}>
+                      Algorithmic Composite Rank
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="comparison-table-wrapper">
+            <table className="engineering-table comparison-matrix-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '22%' }}>Technical Requirement</th>
+                  <th style={{ width: '22%' }}>Original ({targetPart.partNumber})</th>
+                  <th style={{ width: '22%' }}>Candidate ({candidate.partNumber})</th>
+                  <th style={{ width: '14%' }}>Result</th>
+                  <th style={{ width: '20%' }}>Engineering Explanation & Evidence</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {candidate.specifications.map((spec, idx) => (
+                  <tr key={idx} className={spec.critical ? 'row-critical' : ''}>
+                    <td>
+                      <div className="spec-req-name">
+                        {spec.name}
+                        {spec.critical && (
+                          <span className="critical-tag" title="Critical requirement for physical fit or electrical safety">
+                            Critical
+                          </span>
+                        )}
+                      </div>
+                      <span className="spec-cat-label text-muted-xs">{spec.category}</span>
+                    </td>
+
+                    <td className="tech-font font-medium original-val-cell">
+                      {spec.originalValue}
+                    </td>
+
+                    <td className="tech-font font-semibold candidate-val-cell">
+                      {spec.candidateValue}
+                    </td>
+
+                    <td>{getStatusBadge(spec.result)}</td>
+
+                    <td>
+                      <p className="spec-explanation">{spec.explanation}</p>
+                      {spec.evidenceId && (
+                        <button
+                          type="button"
+                          className="btn-link-action mt-1"
+                          onClick={() => {
+                            const ev = candidate.evidence.find((e) => e.id === spec.evidenceId) || candidate.evidence[0];
+                            if (ev) setActiveEvidence(ev);
+                          }}
+                        >
+                          <ShieldCheck size={11} className="text-teal" />
+                          <span>Inspect Datasheet Evidence</span>
+                          <ExternalLink size={10} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Uncertainty & Tolerances Panel */}

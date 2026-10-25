@@ -36,11 +36,28 @@ class SearchRecord:
         self.error = error
 
 
+from app.services.ranking_service import evaluate_candidate_15_parameters
+
+
+def _enrich_candidate(cand: CandidateResponse) -> CandidateResponse:
+    evals, _ = evaluate_candidate_15_parameters(
+        part_number=cand.part_number,
+        manufacturer=cand.manufacturer,
+        compatibility=cand.compatibility,
+        base_score=cand.score,
+        specs=cand.specifications,
+        evidence_count=len(cand.evidence),
+    )
+    cand.evaluation_parameters = evals
+    return cand
+
+
 class MockSearchProvider:
     """Deterministic mock provider that returns consistent candidates for the same request."""
 
     def discover_candidates(self, request: SearchCreateRequest) -> list[CandidateResponse]:
-        return self._generate_candidates(request)
+        raw_candidates = self._generate_candidates(request)
+        return [_enrich_candidate(c) for c in raw_candidates]
 
     def _generate_candidates(self, request: SearchCreateRequest) -> list[CandidateResponse]:
         query = f"{request.part_name} {request.original_part_number}".lower()
