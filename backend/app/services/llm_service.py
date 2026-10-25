@@ -1,6 +1,13 @@
+from __future__ import annotations
 import os
+from pathlib import Path
 from typing import Any, Optional
 import httpx
+from dotenv import load_dotenv
+
+root_dir = Path(__file__).resolve().parent.parent.parent.parent
+load_dotenv(root_dir / ".env")
+load_dotenv(root_dir / "backend" / ".env")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")

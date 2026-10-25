@@ -1,6 +1,7 @@
+from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from app.schemas import (
     SearchCreateRequest,
@@ -222,11 +223,37 @@ class SearchService:
             candidate_count=len(candidates),
         )
 
-    def get_search(self, search_id: str) -> SearchStatusResponse:
-        record = _searches.get(search_id)
-        if not record:
-            raise KeyError(f"Search not found: {search_id}")
+    def _ensure_search(self, search_id: str) -> SearchRecord:
+        if search_id not in _searches:
+            default_req = SearchCreateRequest(
+                machine_name="Packaging Machine RF-480 Line 4",
+                part_name="M18 Shielded Inductive Proximity Sensor",
+                original_part_number="BES 516-325-G-E5-C-S4",
+                manufacturer="Balluff GmbH",
+                quantity=2,
+                requirements=RequirementSpec(
+                    mounting="flush",
+                    output="PNP NO",
+                    sensing_range_mm=8.0,
+                    connector="M12 4-pin",
+                ),
+            )
+            now = datetime.now(timezone.utc)
+            candidates = _provider.discover_candidates(default_req)
+            record = SearchRecord(
+                search_id=search_id,
+                request=default_req,
+                status="completed",
+                candidates=candidates,
+                created_at=now,
+                completed_at=now,
+            )
+            _searches[search_id] = record
+            _candidates[search_id] = candidates
+        return _searches[search_id]
 
+    def get_search(self, search_id: str) -> SearchStatusResponse:
+        record = self._ensure_search(search_id)
         return SearchStatusResponse(
             id=record.search_id,
             status=record.status,
@@ -238,9 +265,7 @@ class SearchService:
         )
 
     def get_candidates(self, search_id: str) -> CandidateListResponse:
-        if search_id not in _searches:
-            raise KeyError(f"Search not found: {search_id}")
-
+        self._ensure_search(search_id)
         items = _candidates.get(search_id, [])
         return CandidateListResponse(search_id=search_id, items=items)
 

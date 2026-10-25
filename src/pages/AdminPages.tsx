@@ -26,7 +26,7 @@ import {
   FileCheck2,
 } from 'lucide-react';
 import { DEMO_ADMIN_METRICS } from '../data/mockData';
-import { triggerPartScrape } from '../api/crawler';
+import { triggerPartScrape, SPECIFIC_INDUSTRIAL_SOURCES } from '../api/crawler';
 
 interface AdminViewProps {
   subpage: 'dashboard' | 'sources' | 'jobs' | 'products' | 'suppliers' | 'quality' | 'users' | 'settings';
@@ -724,6 +724,29 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
                 Dispatch an autonomous headless browser agent to navigate any distributor or manufacturer product page and extract real-time technical specs, pricing, and inventory.
               </p>
 
+              <div className="mb-3">
+                <span className="text-xs text-slate-300 font-medium block mb-1">
+                  Target Specific Whitelisted Industrial Sites (Prevents General Web Crawl Errors):
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {SPECIFIC_INDUSTRIAL_SOURCES.map((source) => (
+                    <button
+                      key={source.id}
+                      type="button"
+                      className="btn btn-xs btn-outline"
+                      style={{ fontSize: '11px', padding: '2px 8px' }}
+                      onClick={() => {
+                        const targetUrl = source.url_template.replace('{part_number}', encodeURIComponent(liveScrapePartNum || 'IGT205'));
+                        setLiveScrapeUrl(targetUrl);
+                      }}
+                      title={`Target ${source.name} catalog`}
+                    >
+                      {source.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="form-row">
                 <div className="form-group col-6">
                   <label className="form-label text-xs">Target Supplier URL</label>
@@ -742,7 +765,10 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
                     className="form-input tech-font text-xs"
                     placeholder="e.g. IGT205"
                     value={liveScrapePartNum}
-                    onChange={(e) => setLiveScrapePartNum(e.target.value)}
+                    onChange={(e) => {
+                      const newPart = e.target.value;
+                      setLiveScrapePartNum(newPart);
+                    }}
                   />
                 </div>
               </div>
