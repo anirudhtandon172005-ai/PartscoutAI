@@ -371,70 +371,141 @@ export const AuthPages: React.FC<AuthPageProps> = ({ mode: initialMode = 'login'
             </button>
           </form>
 
-          {/* Quick Demo Sign-in Personas (Instant one-click access) */}
-          <div className="quick-persona-section mt-5">
-            <div className="auth-divider">
-              <span>OR 1-CLICK PROTOTYPE PERSONA ACCESS</span>
-            </div>
+          {/* Mode Switch Prompt */}
+          <div className="auth-card-switch-prompt mt-4">
+            {activeTab === 'signup' && (
+              <>
+                <span>Already have a plant account?</span>
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => {
+                    setActiveTab('login');
+                    setErrorMsg(null);
+                    setSuccessMsg(null);
+                  }}
+                >
+                  Sign In to existing session
+                </button>
+              </>
+            )}
 
-            <div className="persona-button-list mt-3">
-              <button
-                type="button"
-                className="btn-persona"
-                disabled={submitting}
-                onClick={() => handleQuickPersona('engineer')}
-              >
-                <div className="persona-btn-text">
-                  <div className="persona-name-row">
-                    <strong>Marcus Vance</strong>
-                    <span className="persona-badge-tag tag-engineer">Engineer</span>
-                  </div>
-                  <span>Lead Maintenance Specialist • Line 4 Capper Asset</span>
-                </div>
-                <ArrowRight size={14} className="persona-arrow" />
-              </button>
+            {activeTab === 'login' && (
+              <>
+                <span>Need to register a new plant profile?</span>
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => {
+                    setActiveTab('signup');
+                    setErrorMsg(null);
+                    setSuccessMsg(null);
+                  }}
+                >
+                  Create Plant Account
+                </button>
+              </>
+            )}
 
-              <button
-                type="button"
-                className="btn-persona"
-                disabled={submitting}
-                onClick={() => handleQuickPersona('procurement')}
-              >
-                <div className="persona-btn-text">
-                  <div className="persona-name-row">
-                    <strong>Elena Gomez</strong>
-                    <span className="persona-badge-tag tag-procurement">Procurement</span>
-                  </div>
-                  <span>Senior Procurement Lead • RFQ & Stock Dispatch</span>
-                </div>
-                <ArrowRight size={14} className="persona-arrow" />
-              </button>
-
-              <button
-                type="button"
-                className="btn-persona"
-                disabled={submitting}
-                onClick={() => handleQuickPersona('admin')}
-              >
-                <div className="persona-btn-text">
-                  <div className="persona-name-row">
-                    <strong>Sarah Jenkins</strong>
-                    <span className="persona-badge-tag tag-admin">Administrator</span>
-                  </div>
-                  <span>Systems Admin • Web Crawler & Quality Audits</span>
-                </div>
-                <ArrowRight size={14} className="persona-arrow" />
-              </button>
-            </div>
+            {activeTab === 'reset' && (
+              <>
+                <span>Remember your engineering credentials?</span>
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => {
+                    setActiveTab('login');
+                    setErrorMsg(null);
+                    setSuccessMsg(null);
+                  }}
+                >
+                  Back to Sign In
+                </button>
+              </>
+            )}
           </div>
 
-          {/* Footer note */}
-          <div className="auth-card-footer mt-5">
-            <div className="backend-sync-indicator">
-              <Server size={13} className="text-teal" />
-              <span>FastAPI Backend Verification Endpoint: <code className="tech-font">/api/v1/auth/verify</code></span>
+          {/* Sign Up Security & RBAC Guarantee Notes */}
+          {activeTab === 'signup' && (
+            <div className="auth-security-guarantee mt-4">
+              <div className="security-item">
+                <ShieldCheck size={14} className="text-teal" />
+                <span>Direct Supabase AES-256 JWT Authentication</span>
+              </div>
+              <div className="security-item">
+                <CheckCircle2 size={14} className="text-orange" />
+                <span>Deterministic Role-Based Permissions</span>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Quick Demo Sign-in Personas (Only displayed on Sign In tab) */}
+          {activeTab === 'login' && (
+            <div className="quick-persona-section mt-5">
+              <div className="auth-divider">
+                <span>OR 1-CLICK PROTOTYPE PERSONA ACCESS</span>
+              </div>
+
+              <div className="persona-button-list mt-3">
+                <button
+                  type="button"
+                  className="btn-persona"
+                  disabled={submitting}
+                  onClick={() => handleQuickPersona('engineer')}
+                >
+                  <div className="persona-btn-text">
+                    <div className="persona-name-row">
+                      <strong>Marcus Vance</strong>
+                      <span className="persona-badge-tag tag-engineer">Engineer</span>
+                    </div>
+                    <span>Lead Maintenance Specialist • Line 4 Capper Asset</span>
+                  </div>
+                  <ArrowRight size={14} className="persona-arrow" />
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-persona"
+                  disabled={submitting}
+                  onClick={() => handleQuickPersona('procurement')}
+                >
+                  <div className="persona-btn-text">
+                    <div className="persona-name-row">
+                      <strong>Elena Gomez</strong>
+                      <span className="persona-badge-tag tag-procurement">Procurement</span>
+                    </div>
+                    <span>Senior Procurement Lead • RFQ & Stock Dispatch</span>
+                  </div>
+                  <ArrowRight size={14} className="persona-arrow" />
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-persona"
+                  disabled={submitting}
+                  onClick={() => handleQuickPersona('admin')}
+                >
+                  <div className="persona-btn-text">
+                    <div className="persona-name-row">
+                      <strong>Sarah Jenkins</strong>
+                      <span className="persona-badge-tag tag-admin">Administrator</span>
+                    </div>
+                    <span>Systems Admin • Web Crawler & Quality Audits</span>
+                  </div>
+                  <ArrowRight size={14} className="persona-arrow" />
+                </button>
+              </div>
+
+              {/* Polished Backend Telemetry Badge */}
+              <div className="auth-system-telemetry mt-4">
+                <div className="telemetry-inner">
+                  <Server size={12} className="text-teal" />
+                  <span className="telemetry-label">Backend Token Verification:</span>
+                  <code className="telemetry-endpoint">/api/v1/auth/verify</code>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

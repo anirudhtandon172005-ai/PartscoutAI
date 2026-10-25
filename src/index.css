@@ -7126,3 +7126,90 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* Auth Card Mode Switch Prompts & Links */
+.auth-card-switch-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #94A3B8;
+  padding: 0.5rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auth-switch-link {
+  background: none;
+  border: none;
+  color: #FB923C;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-switch-link:hover {
+  color: #FDBA74;
+  background: rgba(234, 88, 12, 0.12);
+}
+
+/* Sign Up Security & Compliance Guarantees */
+.auth-security-guarantee {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.85rem 1.15rem;
+}
+
+.security-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.78rem;
+  color: #CBD5E1;
+  font-weight: 500;
+}
+
+/* Polished System Telemetry Footer */
+.auth-system-telemetry {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1.25rem;
+}
+
+.telemetry-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(13, 148, 136, 0.1);
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  color: #2DD4BF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.telemetry-label {
+  font-weight: 600;
+  color: #94A3B8;
+}
+
+.telemetry-endpoint {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #5EEAD4;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+
