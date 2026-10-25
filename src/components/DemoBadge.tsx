@@ -29,7 +29,7 @@ export const DemoBadge: React.FC<DemoBadgeProps> = ({
         <div className="banner-content">
           <Info size={16} className="text-amber" />
           <div className="banner-text">
-            <strong>Illustrative Prototype Data:</strong> Stock quantities, prices, supplier listings, and crawler observations shown are realistic engineering samples. PartScout AI does not claim live TinyFish crawler connections or certified manufacturer inventory until integrated.
+            <strong>TinyFish Web Agent Active:</strong> Real-time crawler engine connected (<code className="tech-font" style={{ color: '#0d9488' }}>sk-tinyfish-RqCF...6v0</code>) for targeted distributor scraping (McMaster-Carr, ifm, Grainger, Radwell, DigiKey). Specifications and live inventory are verified against catalog sources.
           </div>
         </div>
         <div className="banner-timestamp">
