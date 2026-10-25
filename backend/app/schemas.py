@@ -21,7 +21,7 @@ class SearchCreateRequest(BaseModel):
     original_part_number: str = Field(min_length=1, max_length=200)
     manufacturer: Optional[str] = Field(default=None, max_length=200)
     quantity: int = Field(gt=0, le=100000)
-    requirements: RequirementSpec
+    requirements: RequirementSpec = Field(default_factory=RequirementSpec)
 
 
 class SearchCreateResponse(BaseModel):

@@ -165,8 +165,357 @@ class MockSearchProvider:
                 ),
             ]
 
-        # Category 2: Inductive Sensors & Automation Presence
-        if any(w in query for w in ["sensor", "proximity", "bes", "igt", "inductive", "balluff"]):
+        # Category 2: Bolts, Screws & Threaded Fasteners
+        if any(w in query for w in ["bolt", "screw", "hex", "stud", "cap screw", "threaded"]):
+            return [
+                CandidateResponse(
+                    id="candidate-bolt-001",
+                    part_number="91280A540",
+                    manufacturer="McMaster-Carr",
+                    compatibility="compatible",
+                    score=98,
+                    specifications={
+                        "category": "High-Strength Fasteners / Hex Head Cap Screws",
+                        "thread_size": "M10 x 1.5 Metric Coarse",
+                        "length": "45 mm Under Head",
+                        "material": "Grade 8 / Class 10.9 High-Tensile Alloy Steel",
+                        "finish": "Zinc-Yellow Trivalent Chromate Plated",
+                        "drive_style": "16 mm External Hex A/F",
+                        "tensile_strength": "150,000 psi (1040 MPa)",
+                        "standards": "DIN 931 / ISO 4014 Specification",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="tensile_strength",
+                            quote="Class 10.9 heat-treated alloy steel delivers high shear and clamping force for dynamic machine joints.",
+                            source_url="https://www.mcmaster.com/91280A540",
+                            confidence=0.99,
+                        ),
+                        CandidateEvidence(
+                            field="standards",
+                            quote="Conforms to ISO 4014 partially threaded standard industrial machine dimensions.",
+                            source_url="https://www.mcmaster.com/91280A540",
+                            confidence=0.98,
+                        ),
+                    ],
+                ),
+                CandidateResponse(
+                    id="candidate-bolt-002",
+                    part_number="FAS-M10X45-A2",
+                    manufacturer="Fastenal Industrial",
+                    compatibility="compatible",
+                    score=94,
+                    specifications={
+                        "category": "Corrosion-Resistant Stainless Fasteners",
+                        "thread_size": "M10 x 1.5",
+                        "length": "45 mm",
+                        "material": "A2-70 (304) Stainless Steel",
+                        "drive_style": "16 mm Hex",
+                        "proof_strength": "700 MPa",
+                        "operating_environment": "Washdown & Food Processing Grade",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="material",
+                            quote="A2-70 Austenitic Stainless Steel eliminates galvanic rust in damp washdown conveyors.",
+                            source_url="https://www.fastenal.com/product/details/M10-45-A2",
+                            confidence=0.97,
+                        ),
+                    ],
+                ),
+                CandidateResponse(
+                    id="candidate-bolt-003",
+                    part_number="1N894",
+                    manufacturer="Grainger Industrial",
+                    compatibility="compatible",
+                    score=91,
+                    specifications={
+                        "category": "Heavy Hex Bolts",
+                        "thread_size": "M10 x 1.5",
+                        "length": "45 mm",
+                        "material": "Class 8.8 Medium Carbon Steel",
+                        "finish": "Clear Zinc Plated",
+                        "package_quantity": "50 pcs / box",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="compatibility",
+                            quote="Drop-in standard metric hex bolt replacement certified for general industrial machinery.",
+                            source_url="https://www.grainger.com/product/1N894",
+                            confidence=0.95,
+                        ),
+                    ],
+                ),
+            ]
+
+        # Category 3: Industrial Bearings & Power Transmission
+        if any(w in query for w in ["bearing", "ball bearing", "roller bearing", "skf", "timken", "fag", "nsk", "pillow block"]):
+            return [
+                CandidateResponse(
+                    id="candidate-bearing-001",
+                    part_number="6205-2RSH",
+                    manufacturer="SKF",
+                    compatibility="compatible",
+                    score=99,
+                    specifications={
+                        "category": "Deep Groove Ball Bearings / Sealed",
+                        "bore_diameter": "25 mm (ID)",
+                        "outer_diameter": "52 mm (OD)",
+                        "width": "15 mm",
+                        "seals": "Dual Contact Rubber Seals (2RSH / NBR)",
+                        "basic_dynamic_load": "14.8 kN (Cr)",
+                        "limiting_speed": "8,500 RPM",
+                        "internal_clearance": "CN Normal Radial Clearance",
+                        "standards": "ISO 492 / DIN 625 Precision Tolerances",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="bore_diameter",
+                            quote="Bore diameter 25 mm precision ground to ISO class normal fits for rotating shafts.",
+                            source_url="https://www.skf.com/group/products/rolling-bearings/ball-bearings/6205-2RSH",
+                            confidence=0.99,
+                        ),
+                        CandidateEvidence(
+                            field="seals",
+                            quote="RSH sheet steel reinforced acrylonitrile-butadiene rubber seals keep grease in and fine dust out.",
+                            source_url="https://www.skf.com/group/products/rolling-bearings/ball-bearings/6205-2RSH",
+                            confidence=0.98,
+                        ),
+                    ],
+                ),
+                CandidateResponse(
+                    id="candidate-bearing-002",
+                    part_number="6205-2RS-TIMKEN",
+                    manufacturer="Timken",
+                    compatibility="compatible",
+                    score=95,
+                    specifications={
+                        "category": "Heavy Duty Deep Groove Bearings",
+                        "bore_diameter": "25 mm",
+                        "outer_diameter": "52 mm",
+                        "width": "15 mm",
+                        "seals": "Molded Rubber Contact Seals (2RS)",
+                        "basic_dynamic_load": "14.0 kN",
+                        "grease_fill": "Chevron SRI-2 High Temperature Grease",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="dynamic_load",
+                            quote="Engineered with vacuum-degassed 52100 high carbon chrome steel for extended L10 fatigue life.",
+                            source_url="https://www.timken.com/products/bearings/deep-groove/6205-2rs",
+                            confidence=0.97,
+                        ),
+                    ],
+                ),
+                CandidateResponse(
+                    id="candidate-bearing-003",
+                    part_number="6205DDU-NSK",
+                    manufacturer="NSK",
+                    compatibility="compatible",
+                    score=92,
+                    specifications={
+                        "category": "Electric Motor Quality Ball Bearings",
+                        "bore_diameter": "25 mm",
+                        "outer_diameter": "52 mm",
+                        "width": "15 mm",
+                        "seals": "Double Contact DDU Rubber Seals",
+                        "vibration_level": "Quiet Running V2 Grade",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="vibration_level",
+                            quote="Low noise EMQ bearing designed for continuous high-speed conveyor and motor drives.",
+                            source_url="https://www.nsk.com/products/bearings/6205ddu",
+                            confidence=0.96,
+                        ),
+                    ],
+                ),
+            ]
+
+        # Category 4: Electric Motors, Drives & VFD Inverters
+        if any(w in query for w in ["motor", "vfd", "inverter", "drive", "servo", "siemens", "weg", "baldor"]):
+            return [
+                CandidateResponse(
+                    id="candidate-motor-001",
+                    part_number="1LE1001-1DB4",
+                    manufacturer="Siemens",
+                    compatibility="compatible",
+                    score=98,
+                    specifications={
+                        "category": "Low Voltage 3-Phase AC Induction Motors",
+                        "rated_power": "2.2 kW (3.0 HP)",
+                        "rated_speed": "1750 RPM (4-Pole)",
+                        "rated_voltage": "230V / 400V AC 50/60 Hz",
+                        "frame_size": "IEC 90L Cast Aluminum (IP55)",
+                        "shaft_diameter": "24 mm with Keyway",
+                        "efficiency_class": "IE3 Premium Efficiency",
+                        "mounting_type": "B3 Foot Mounted / B14 Face Flange",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="rated_power",
+                            quote="Continuous heavy-duty 2.2 kW output compliant with IEC 60034-30 standard.",
+                            source_url="https://mall.industry.siemens.com/mall/en/WW/Catalog/Product/1LE1001-1DB4",
+                            confidence=0.99,
+                        ),
+                    ],
+                ),
+                CandidateResponse(
+                    id="candidate-motor-002",
+                    part_number="W22-00318ET3E90L",
+                    manufacturer="WEG",
+                    compatibility="compatible",
+                    score=94,
+                    specifications={
+                        "category": "Industrial Cast Iron AC Motors",
+                        "rated_power": "2.2 kW (3.0 HP)",
+                        "rated_speed": "1755 RPM",
+                        "frame_size": "NEMA 90L Cast Iron Housing",
+                        "shaft_diameter": "24 mm",
+                        "efficiency_class": "NEMA Premium / IE3",
+                        "ingress_protection": "IP55 Standard Washdown",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="frame_size",
+                            quote="Cast iron FC-200 housing provides superior thermal dissipation and vibration dampening.",
+                            source_url="https://www.weg.net/institutional/US/en/products/electric-motors/w22",
+                            confidence=0.97,
+                        ),
+                    ],
+                ),
+                CandidateResponse(
+                    id="candidate-motor-003",
+                    part_number="ATV320U22N4B",
+                    manufacturer="Schneider Electric",
+                    compatibility="partial",
+                    score=89,
+                    specifications={
+                        "category": "Variable Speed Inverter Drives (VFD)",
+                        "motor_power_rating": "2.2 kW (3 HP)",
+                        "supply_voltage": "380 ... 500 V AC 3-Phase",
+                        "output_frequency": "0.1 ... 599 Hz",
+                        "communication_protocol": "Modbus RTU / CANopen",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="motor_power_rating",
+                            quote="Compact variable speed drive optimized for 2.2 kW pumps, conveyors, and mechanical packagers.",
+                            source_url="https://www.se.com/ww/en/product/ATV320U22N4B",
+                            confidence=0.95,
+                        ),
+                    ],
+                ),
+            ]
+
+        # Category 5: Pneumatics, Valves & Actuators
+        if any(w in query for w in ["valve", "solenoid", "pneumatic", "cylinder", "festo", "smc", "parker"]):
+            return [
+                CandidateResponse(
+                    id="candidate-valve-001",
+                    part_number="VUVS-L25-M52-MD-G14",
+                    manufacturer="Festo",
+                    compatibility="compatible",
+                    score=97,
+                    specifications={
+                        "category": "Pneumatic Directional Control Valves",
+                        "valve_function": "5/2-Way Bistable Spool Valve",
+                        "pneumatic_ports": "G 1/4 Female Thread",
+                        "solenoid_voltage": "24 V DC (3.1 W)",
+                        "operating_pressure": "2.0 ... 10.0 bar (30-145 psi)",
+                        "nominal_flow_rate": "1,200 L/min (Qn)",
+                        "housing_material": "Anodized Die-Cast Aluminum",
+                        "electrical_connection": "DIN EN 175301-803 Form C Plug",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="valve_function",
+                            quote="5/2 way monostable pneumatic spool valve with internal pilot air and mechanical reset spring.",
+                            source_url="https://www.festo.com/catalogue/vuvs",
+                            confidence=0.99,
+                        ),
+                    ],
+                ),
+                CandidateResponse(
+                    id="candidate-valve-002",
+                    part_number="SY5120-5LZ-01",
+                    manufacturer="SMC",
+                    compatibility="compatible",
+                    score=93,
+                    specifications={
+                        "category": "Compact Solenoid Valves",
+                        "valve_function": "5/2 Single Solenoid",
+                        "pneumatic_ports": "Rc 1/8 / G 1/4 Subplate Mount",
+                        "solenoid_voltage": "24 V DC Low Power (0.35 W)",
+                        "operating_pressure": "1.5 ... 7.0 bar",
+                        "flow_rate": "1,050 L/min",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="solenoid_voltage",
+                            quote="Ultra low power 0.35W coil allows direct driving from PLC digital output cards without interposing relays.",
+                            source_url="https://www.smcworld.com/products/en/directional/sy5000",
+                            confidence=0.96,
+                        ),
+                    ],
+                ),
+            ]
+
+        # Category 6: Industrial Cables, M12 & Connectivity
+        if any(w in query for w in ["cable", "cord", "wire", "connector", "m12", "patch", "phoenix contact"]):
+            return [
+                CandidateResponse(
+                    id="candidate-cable-001",
+                    part_number="SAC-4P-5,0-PUR/M12FS",
+                    manufacturer="Phoenix Contact",
+                    compatibility="compatible",
+                    score=98,
+                    specifications={
+                        "category": "Sensor/Actuator Cables & Connectors",
+                        "connector_type": "M12 A-Coded Female Straight Socket",
+                        "number_of_positions": "4-Pin Gold-Plated Contacts",
+                        "cable_length": "5.0 meters (16.4 ft)",
+                        "sheath_material": "Halogen-Free Oil-Resistant PUR (Black)",
+                        "conductor_cross_section": "4 x 0.34 mm² (AWG 22)",
+                        "ingress_protection": "IP67 / IP68 / IP69K",
+                        "bending_cycles": "10,000,000 Drag Chain Rated",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="sheath_material",
+                            quote="Polyurethane PUR outer jacket resists coolants, synthetic lubricants, and welding sparks.",
+                            source_url="https://www.phoenixcontact.com/product/1668124",
+                            confidence=0.99,
+                        ),
+                    ],
+                ),
+                CandidateResponse(
+                    id="candidate-cable-002",
+                    part_number="7000-12221-0340500",
+                    manufacturer="Murrelektronik",
+                    compatibility="compatible",
+                    score=94,
+                    specifications={
+                        "category": "Industrial Sensor Patch Cords",
+                        "connector_type": "M12 Female Straight to Flying Leads",
+                        "number_of_positions": "4-Pin",
+                        "cable_length": "5.0 meters",
+                        "cable_jacket": "PUR Flexible Gray Cable",
+                        "protection": "IP67 Coupling",
+                    },
+                    evidence=[
+                        CandidateEvidence(
+                            field="connector_type",
+                            quote="M12 screw locking knurled nut made of nickel-plated die-cast zinc with vibration-proof ratcheting.",
+                            source_url="https://www.murrelektronik.com/product/7000-12221-0340500",
+                            confidence=0.97,
+                        ),
+                    ],
+                ),
+            ]
+
+        # Category 7: Inductive Sensors & Automation Presence
+        if any(w in query for w in ["sensor", "proximity", "bes", "igt", "inductive", "balluff", "photoelectric"]):
             return [
                 CandidateResponse(
                     id="candidate-001",
@@ -196,12 +545,6 @@ class MockSearchProvider:
                             quote="Flush mountable M18 x 1 threaded body",
                             source_url="https://www.ifm.com/product/IGT205",
                             confidence=0.98,
-                        ),
-                        CandidateEvidence(
-                            field="output",
-                            quote="PNP Normally Open (NO)",
-                            source_url="https://www.ifm.com/manuals/IGT205_EN.pdf",
-                            confidence=0.97,
                         ),
                     ],
                 ),
@@ -257,7 +600,7 @@ class MockSearchProvider:
                 ),
             ]
 
-        # Category 3: General industrial parts fallback tailored to request
+        # Category 8: General industrial parts fallback tailored to request
         clean_name = request.part_name.title()
         return [
             CandidateResponse(
@@ -362,19 +705,64 @@ class SearchService:
 
     def _ensure_search(self, search_id: str) -> SearchRecord:
         if search_id not in _searches:
-            is_nail = "nail" in search_id.lower() or "fastener" in search_id.lower()
+            s_lower = search_id.lower()
+            if "nail" in s_lower:
+                part_name = "Common Steel Wire Framing Nail (10D)"
+                part_no = "97990A110"
+                mfg = "McMaster-Carr"
+                mach = "Automated Packaging & Crating Unit (Line 2)"
+                qty = 250
+            elif "bolt" in s_lower or "screw" in s_lower or "hex" in s_lower:
+                part_name = "Hex Head Cap Screw Grade 8 (M10 x 1.5 x 45mm)"
+                part_no = "91280A540"
+                mfg = "McMaster-Carr"
+                mach = "High-Torque Drive Assembly Line 3"
+                qty = 50
+            elif "bearing" in s_lower:
+                part_name = "Deep Groove Ball Bearing (6205-2RS Sealed)"
+                part_no = "6205-2RSH"
+                mfg = "SKF"
+                mach = "Conveyor Main Drive Spindle Line 1"
+                qty = 4
+            elif "motor" in s_lower or "drive" in s_lower or "vfd" in s_lower or "inverter" in s_lower:
+                part_name = "3-Phase AC Induction Motor (2.2kW / 3HP 1750 RPM)"
+                part_no = "1LE1001-1DB4"
+                mfg = "Siemens"
+                mach = "High-Speed Bottling Depalletizer Line 4"
+                qty = 1
+            elif "valve" in s_lower or "pneumatic" in s_lower or "solenoid" in s_lower:
+                part_name = "5/2-Way Directional Solenoid Valve (G 1/4\" 24V DC)"
+                part_no = "VUVS-L25-M52-MD-G14"
+                mfg = "Festo"
+                mach = "Pneumatic Diverter System Line 2"
+                qty = 2
+            elif "cable" in s_lower or "connector" in s_lower or "m12" in s_lower:
+                part_name = "M12 4-Pin Shielded Sensor Cable (5m PUR)"
+                part_no = "SAC-4P-5,0-PUR/M12FS"
+                mfg = "Phoenix Contact"
+                mach = "Sensor Network Trunk Line 4"
+                qty = 10
+            elif any(w in s_lower for w in ["sensor", "proximity", "bes", "igt", "inductive", "balluff"]):
+                part_name = "M18 Shielded Inductive Proximity Sensor"
+                part_no = "BES 516-325-G-E5-C-S4"
+                mfg = "Balluff GmbH"
+                mach = "Packaging Machine RF-480 Line 4"
+                qty = 2
+            else:
+                clean_term = s_lower.replace("req-", "").replace("search-", "").split("-")[0].title() or "Industrial Replacement Component"
+                part_name = f"{clean_term} Industrial Assembly"
+                part_no = f"PART-{clean_term[:4].upper()}-2026"
+                mfg = "Industrial Catalog Supplier"
+                mach = "General Facility Asset Line"
+                qty = 1
+
             default_req = SearchCreateRequest(
-                machine_name="Automated Packaging & Crating Unit Line 2" if is_nail else "Packaging Machine RF-480 Line 4",
-                part_name="Common Steel Wire Framing Nail (10D)" if is_nail else "M18 Shielded Inductive Proximity Sensor",
-                original_part_number="97990A110" if is_nail else "BES 516-325-G-E5-C-S4",
-                manufacturer="McMaster-Carr" if is_nail else "Balluff GmbH",
-                quantity=250 if is_nail else 2,
-                requirements=RequirementSpec(
-                    mounting="flush" if not is_nail else None,
-                    output="PNP NO" if not is_nail else None,
-                    sensing_range_mm=8.0 if not is_nail else None,
-                    connector="M12 4-pin" if not is_nail else None,
-                ),
+                machine_name=mach,
+                part_name=part_name,
+                original_part_number=part_no,
+                manufacturer=mfg,
+                quantity=qty,
+                requirements=RequirementSpec(),
             )
             now = datetime.now(timezone.utc)
             candidates = _provider.discover_candidates(default_req)

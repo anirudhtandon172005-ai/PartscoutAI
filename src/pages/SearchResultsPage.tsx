@@ -204,6 +204,152 @@ function mapCandidateToUI(candidate: CandidateResponse): ComponentItem {
   };
 }
 
+function detectCategoryFromText(text: string): 'nail' | 'bolt' | 'bearing' | 'motor' | 'valve' | 'cable' | 'sensor' | 'general' {
+  const t = text.toLowerCase();
+  if (t.includes('nail') || t.includes('framing nail') || t.includes('wire fastener')) return 'nail';
+  if (t.includes('bolt') || t.includes('screw') || t.includes('hex') || t.includes('fastener')) return 'bolt';
+  if (t.includes('bearing') || t.includes('skf') || t.includes('roller') || t.includes('ball bearing') || t.includes('timken') || t.includes('nsk')) return 'bearing';
+  if (t.includes('motor') || t.includes('vfd') || t.includes('induction') || t.includes('drive')) return 'motor';
+  if (t.includes('valve') || t.includes('solenoid') || t.includes('pneumatic') || t.includes('festo') || t.includes('smc')) return 'valve';
+  if (t.includes('cable') || t.includes('m12') || t.includes('cordset') || t.includes('connector') || t.includes('phoenix')) return 'cable';
+  if (t.includes('sensor') || t.includes('igt') || t.includes('bes') || t.includes('omron') || t.includes('balluff') || t.includes('ifm') || t.includes('proximity')) return 'sensor';
+  return 'general';
+}
+
+function getCategoryFallbackRequest(cat: string, reqId: string): PartRequest {
+  if (cat === 'nail') {
+    return {
+      id: reqId,
+      requestNumber: 'REQ-2026-NAIL-01',
+      machineId: 'mach-crate-line2',
+      machineName: 'Automated Packaging & Crating Unit (Line 2)',
+      partName: '10D Smooth Shank Framing Nail (316 Stainless)',
+      originalPartNumber: '97990A110',
+      manufacturer: 'McMaster-Carr',
+      quantityNeeded: 250,
+      urgency: 'Line Down (Critical)',
+      acceptableAlternatives: true,
+      customRequirements: '3.0 inch length, 9 gauge 0.148 in shank, 316 stainless steel, ASTM F1667',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      status: 'Researching' as const,
+      targetComponentId: 'candidate-nail-001',
+      trackingNotes: [],
+    };
+  }
+  if (cat === 'bolt') {
+    return {
+      id: reqId,
+      requestNumber: 'REQ-2026-BOLT-01',
+      machineId: 'mach-press-01',
+      machineName: 'Hydraulic Stamping Press 400T',
+      partName: 'Hex Head Cap Screw Grade 8.8 (M10 x 50mm)',
+      originalPartNumber: '91280A540',
+      manufacturer: 'McMaster-Carr',
+      quantityNeeded: 50,
+      urgency: 'Line Down (Critical)',
+      acceptableAlternatives: true,
+      customRequirements: 'M10-1.50 pitch, 50mm length, Grade 8.8 steel, zinc plated, ISO 4014',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      status: 'Researching' as const,
+      targetComponentId: 'candidate-bolt-001',
+      trackingNotes: [],
+    };
+  }
+  if (cat === 'bearing') {
+    return {
+      id: reqId,
+      requestNumber: 'REQ-2026-BEARING-01',
+      machineId: 'mach-conveyor-main',
+      machineName: 'Primary Bottling & Palletizing Conveyor',
+      partName: 'Deep Groove Ball Bearing (6205-2RSH)',
+      originalPartNumber: '6205-2RSH',
+      manufacturer: 'SKF',
+      quantityNeeded: 4,
+      urgency: 'Line Down (Critical)',
+      acceptableAlternatives: true,
+      customRequirements: '25mm bore, 52mm OD, 15mm width, dual contact nitrile seals (2RS), 14.8 kN dynamic load, ISO 492',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      status: 'Researching' as const,
+      targetComponentId: 'candidate-bearing-001',
+      trackingNotes: [],
+    };
+  }
+  if (cat === 'motor') {
+    return {
+      id: reqId,
+      requestNumber: 'REQ-2026-MOTOR-01',
+      machineId: 'mach-pump-skid',
+      machineName: 'Centrifugal Coolant Pumping Skid #3',
+      partName: 'Low Voltage 3-Phase AC Induction Motor 3.0kW',
+      originalPartNumber: '1LE1001-1DB22-2AA4',
+      manufacturer: 'Siemens',
+      quantityNeeded: 1,
+      urgency: 'Line Down (Critical)',
+      acceptableAlternatives: true,
+      customRequirements: '3.0 kW (4.0 HP), 400V 50Hz, 1450 RPM, Frame 100L B35 flange/foot, IP55, IEC 60034',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      status: 'Researching' as const,
+      targetComponentId: 'candidate-motor-001',
+      trackingNotes: [],
+    };
+  }
+  if (cat === 'valve') {
+    return {
+      id: reqId,
+      requestNumber: 'REQ-2026-VALVE-01',
+      machineId: 'mach-pick-place',
+      machineName: 'High-Speed Robotic Pick & Place Cell',
+      partName: '5/2-Way Directional Solenoid Valve (G 1/4")',
+      originalPartNumber: 'VUVS-L25-M52-MD-G14-F8-1C1',
+      manufacturer: 'Festo',
+      quantityNeeded: 2,
+      urgency: 'Line Down (Critical)',
+      acceptableAlternatives: true,
+      customRequirements: '5/2 monostable, 24V DC pilot solenoid, 1000 L/min flow rate, G 1/4" BSPP ports, ISO 5599',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      status: 'Researching' as const,
+      targetComponentId: 'candidate-valve-001',
+      trackingNotes: [],
+    };
+  }
+  if (cat === 'cable') {
+    return {
+      id: reqId,
+      requestNumber: 'REQ-2026-CABLE-01',
+      machineId: 'mach-robot-weld',
+      machineName: 'Automated Spot Welding Robot Cell',
+      partName: 'M12 4-Pin Shielded Sensor Cable (5.0m PUR)',
+      originalPartNumber: 'SAC-4P-5,0-PUR/M12FS',
+      manufacturer: 'Phoenix Contact',
+      quantityNeeded: 10,
+      urgency: 'Line Down (Critical)',
+      acceptableAlternatives: true,
+      customRequirements: 'A-coded female straight socket, 4-pin gold contacts, 5.0m oil-resistant PUR, IP67/IP69K',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      status: 'Researching' as const,
+      targetComponentId: 'candidate-cable-001',
+      trackingNotes: [],
+    };
+  }
+  return {
+    id: reqId,
+    requestNumber: 'REQ-2026-SENSOR-01',
+    machineId: 'mach-line4',
+    machineName: 'Automated Assembly Line 4',
+    partName: 'M18 Inductive Proximity Sensor (8mm Flush)',
+    originalPartNumber: 'BES 516-325-G-E5-C-S4',
+    manufacturer: 'Balluff',
+    quantityNeeded: 2,
+    urgency: 'Line Down (Critical)',
+    acceptableAlternatives: true,
+    customRequirements: 'M18x1 threaded, 8.0mm sensing range flush, PNP NO, 10-30V DC, 4-pin M12 connector, IP68',
+    createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+    status: 'Researching' as const,
+    targetComponentId: 'target-bes-516',
+    trackingNotes: [],
+  };
+}
+
 export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId = 'req-2026-line4-sensor' }) => {
   const {
     navigate,
@@ -215,37 +361,18 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
     addToast,
     evaluateCandidateGuardrails,
     guardrails,
+    registerDiscoveredParts,
   } = useApp();
 
-  const isNailSearch = requestId.toLowerCase().includes('nail') || 
-    requests.some((r) => r.id === requestId && (r.partName?.toLowerCase().includes('nail') || r.originalPartNumber?.toLowerCase().includes('nail')));
+  const detectedCategory = detectCategoryFromText(requestId);
 
   const currentReq =
     requests.find((r) => r.id === requestId) ||
     requests.find((r) => r.id.toLowerCase().includes(requestId.toLowerCase()) || requestId.toLowerCase().includes(r.id.toLowerCase())) ||
-    (isNailSearch || requestId.toLowerCase().includes('nail')
-      ? (requests.find((r) => r.partName?.toLowerCase().includes('nail') || r.originalPartNumber?.toLowerCase().includes('nail')) || {
-          id: requestId,
-          requestNumber: 'REQ-2026-NAIL',
-          machineId: 'mach-crate-line2',
-          machineName: 'Automated Packaging & Crating Unit (Line 2)',
-          partName: 'Common Steel Wire Fastener Nail (10D)',
-          originalPartNumber: '97990A110',
-          manufacturer: 'McMaster-Carr',
-          quantityNeeded: 250,
-          urgency: 'Standard Maintenance',
-          acceptableAlternatives: true,
-          customRequirements: '3.0 inch length, 9 gauge 0.148 in shank, corrosion resistant',
-          createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          status: 'Researching' as const,
-          targetComponentId: 'part-nail',
-          trackingNotes: [],
-        })
-      : requests[0]);
+    getCategoryFallbackRequest(detectedCategory, requestId);
 
-  const isNail = (currentReq.partName || '').toLowerCase().includes('nail') ||
-    (currentReq.originalPartNumber || '').toLowerCase().includes('nail') ||
-    requestId.toLowerCase().includes('nail');
+  const activeCategory = detectCategoryFromText(`${currentReq.partName} ${currentReq.originalPartNumber} ${requestId}`);
+  const isNail = activeCategory === 'nail';
 
   const [candidates, setCandidates] = useState<ComponentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -272,7 +399,12 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
         const response = await getCandidates(requestId);
         if (!isMounted) return;
         const mappedCandidates = response.items.map(mapCandidateToUI);
-        setCandidates(mappedCandidates.length > 0 ? mappedCandidates : CANDIDATE_COMPONENTS);
+        if (mappedCandidates.length > 0) {
+          setCandidates(mappedCandidates);
+          registerDiscoveredParts(mappedCandidates);
+        } else {
+          setCandidates(CANDIDATE_COMPONENTS);
+        }
         setError(null);
       } catch (err) {
         if (!isMounted) return;
@@ -374,6 +506,7 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
       };
 
       setCandidates((prev) => [liveCandidate, ...prev.filter(c => c.id !== liveCandidate.id)]);
+      registerDiscoveredParts([liveCandidate]);
 
     } catch (err: any) {
       setScrapeLiveResult({ success: false, error: err?.message, target_url: targetSource.url_template.replace('{part_number}', partNum) });
@@ -607,14 +740,59 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
             </span>
           </div>
           <div className="baseline-specs-row">
-            {isNail ? (
+            {activeCategory === 'nail' ? (
               <>
                 <span className="spec-token">3.0" Length (10D)</span>
                 <span className="spec-token">0.148" Shank Dia (9 Ga)</span>
                 <span className="spec-token">Diamond Point</span>
                 <span className="spec-token">Flat Head (5/16")</span>
-                <span className="spec-token">Carbon Steel</span>
+                <span className="spec-token">316 Stainless</span>
                 <span className="spec-token">Smooth Shank</span>
+              </>
+            ) : activeCategory === 'bolt' ? (
+              <>
+                <span className="spec-token">M10 x 50mm Metric</span>
+                <span className="spec-token">1.50mm Coarse Pitch</span>
+                <span className="spec-token">Hex Drive AF 17mm</span>
+                <span className="spec-token">Grade 8.8 High-Tensile</span>
+                <span className="spec-token">Zinc Plated</span>
+                <span className="spec-token">ISO 4014 / DIN 931</span>
+              </>
+            ) : activeCategory === 'bearing' ? (
+              <>
+                <span className="spec-token">25mm Inner Bore</span>
+                <span className="spec-token">52mm Outer Diameter</span>
+                <span className="spec-token">15mm Width</span>
+                <span className="spec-token">2RS Dual Nitrile Seals</span>
+                <span className="spec-token">14.8 kN Dynamic Load</span>
+                <span className="spec-token">ISO 492 / DIN 625</span>
+              </>
+            ) : activeCategory === 'motor' ? (
+              <>
+                <span className="spec-token">3.0 kW (4.0 HP)</span>
+                <span className="spec-token">400V 50Hz 3-Phase</span>
+                <span className="spec-token">1450 RPM Nominal</span>
+                <span className="spec-token">Frame 100L Flange</span>
+                <span className="spec-token">IP55 Heavy Industrial</span>
+                <span className="spec-token">IEC 60034-1</span>
+              </>
+            ) : activeCategory === 'valve' ? (
+              <>
+                <span className="spec-token">5/2-Way Monostable</span>
+                <span className="spec-token">G 1/4" BSPP Ports</span>
+                <span className="spec-token">24V DC Pilot Solenoid</span>
+                <span className="spec-token">1000 L/min Flow Rate</span>
+                <span className="spec-token">IP65 Protection</span>
+                <span className="spec-token">ISO 5599 Pneumatic</span>
+              </>
+            ) : activeCategory === 'cable' ? (
+              <>
+                <span className="spec-token">M12 A-Coded Female</span>
+                <span className="spec-token">4-Pin Gold Contacts</span>
+                <span className="spec-token">5.0m Cable Length</span>
+                <span className="spec-token">Oil-Resistant PUR</span>
+                <span className="spec-token">IP68 / IP69K</span>
+                <span className="spec-token">IEC 61076-2</span>
               </>
             ) : (
               <>
@@ -637,9 +815,12 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
           <button
             type="button"
             className="btn btn-outline btn-xs mt-2"
-            onClick={() => navigate(isNail ? '/app/quotes' : `/app/parts/${targetPart.id}`)}
+            onClick={() => {
+              const targetId = candidates[0]?.id || currentReq.targetComponentId || 'part-ifm-igt205';
+              navigate(`/app/parts/${targetId}`);
+            }}
           >
-            <span>{isNail ? 'RFQ Quotations' : 'View Baseline Sheet'}</span>
+            <span>View Baseline Sheet</span>
           </button>
         </div>
       </div>

@@ -17,6 +17,17 @@ import {
   Zap,
 } from 'lucide-react';
 
+function getCategoryStandard(category?: string, name?: string): string {
+  const combined = `${category || ''} ${name || ''}`.toLowerCase();
+  if (combined.includes('nail') || combined.includes('fastener')) return 'ASTM F1667 FASTENER SPEC';
+  if (combined.includes('bolt') || combined.includes('screw') || combined.includes('hex')) return 'ISO 4014 / DIN 931 STANDARD';
+  if (combined.includes('bearing') || combined.includes('ball bearing')) return 'ISO 492 / DIN 625 BEARING';
+  if (combined.includes('motor') || combined.includes('induction')) return 'IEC 60034-1 / NEMA MG-1';
+  if (combined.includes('valve') || combined.includes('solenoid') || combined.includes('pneumatic')) return 'ISO 5599 PNEUMATIC';
+  if (combined.includes('cable') || combined.includes('m12') || combined.includes('cordset')) return 'IEC 61076-2-101 CORDSET';
+  return 'IEC 60947-5-2 GEOMETRY';
+}
+
 export const PartDetailPage: React.FC<{ partId?: string }> = ({ partId = 'part-ifm-igt205' }) => {
   const { allParts, targetPart, navigate, toggleSavePart, isPartSaved, setActiveEvidence } = useApp();
 
@@ -86,11 +97,13 @@ export const PartDetailPage: React.FC<{ partId?: string }> = ({ partId = 'part-i
           <div className="visual-panel-card">
             <div className="visual-header">
               <span className="visual-label">INTERACTIVE 3D COMPONENT TWIN</span>
-              <span className="tech-font text-muted-xs">IEC 60947-5-2 GEOMETRY</span>
+              <span className="tech-font text-muted-xs">{getCategoryStandard(component.category, component.name)}</span>
             </div>
             <ThreePartViewer
               partNumber={component.partNumber}
-              manufacturer={`${component.manufacturer} • M18x1.0`}
+              manufacturer={component.manufacturer}
+              partName={component.name}
+              category={component.category}
               highlightSpecs={true}
             />
           </div>

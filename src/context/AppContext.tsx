@@ -27,6 +27,7 @@ import {
 import { INITIAL_GUARDRAILS, INITIAL_PAST_MISTAKES } from '../data/selfImprovingData';
 import { evaluateComponentGuardrails as evaluateGuardrailsUtil } from '../utils/selfImprovingEngine';
 import { createSearch, SearchCreateRequest } from '../api/searches';
+import { CATEGORY_PRESET_PARTS } from '../data/categoryParts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { verifyBackendToken } from '../api/auth';
 
@@ -66,6 +67,8 @@ interface AppContextType {
   targetPart: ComponentItem;
   candidates: ComponentItem[];
   allParts: ComponentItem[];
+  discoveredParts: ComponentItem[];
+  registerDiscoveredParts: (parts: ComponentItem[]) => void;
   requests: PartRequest[];
   suppliers: Supplier[];
   quotations: Quotation[];
@@ -612,42 +615,106 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const executeQuickSearch = async (query: string): Promise<string> => {
     const trimmed = query.trim();
-    const isNail = trimmed.toLowerCase().includes('nail') || trimmed.toLowerCase().includes('fastener');
-    
-    // Check if an existing matching request exists
-    const existing = requests.find((r) =>
-      (isNail && (r.partName?.toLowerCase().includes('nail') || r.originalPartNumber?.toLowerCase().includes('nail') || r.id.toLowerCase().includes('nail'))) ||
-      r.originalPartNumber?.toLowerCase() === trimmed.toLowerCase() ||
-      r.partName?.toLowerCase().includes(trimmed.toLowerCase())
-    );
+    const q = trimmed.toLowerCase();
 
-    if (existing) {
-      return existing.id;
+    // Determine category and specs
+    let categoryKey = 'general';
+    let defaultPartName = trimmed;
+    let defaultPartNumber = trimmed.toUpperCase();
+    let defaultManufacturer = 'Industrial Catalog Supplier';
+    let defaultMachineId = 'mach-general-asset';
+    let defaultMachineName = 'General Plant Facility Asset Line';
+    let defaultQuantity = 1;
+    let defaultSpecs = `Compatible industrial replacement for ${trimmed}`;
+
+    if (q.includes('nail') || q.includes('framing nail') || q.includes('wire nail')) {
+      categoryKey = 'nail';
+      defaultPartName = '10D Smooth Shank Framing Nail (316 Stainless)';
+      defaultPartNumber = '97990A110';
+      defaultManufacturer = 'McMaster-Carr';
+      defaultMachineId = 'mach-crate-line2';
+      defaultMachineName = 'Automated Packaging & Crating Unit (Line 2)';
+      defaultQuantity = 250;
+      defaultSpecs = '3.0 inch length, 9 gauge 0.148 in shank, 316 stainless steel, ASTM F1667';
+    } else if (q.includes('bolt') || q.includes('screw') || q.includes('fastener') || q.includes('hex')) {
+      categoryKey = 'bolt';
+      defaultPartName = 'Hex Head Cap Screw Grade 8.8 (M10 x 50mm)';
+      defaultPartNumber = '91280A540';
+      defaultManufacturer = 'McMaster-Carr';
+      defaultMachineId = 'mach-press-01';
+      defaultMachineName = 'Hydraulic Stamping Press 400T';
+      defaultQuantity = 50;
+      defaultSpecs = 'M10-1.50 pitch, 50mm length, Grade 8.8 medium carbon steel, zinc plated, ISO 4014';
+    } else if (q.includes('bearing') || q.includes('skf') || q.includes('roller') || q.includes('ball bearing') || q.includes('timken') || q.includes('nsk')) {
+      categoryKey = 'bearing';
+      defaultPartName = 'Deep Groove Ball Bearing (6205-2RSH)';
+      defaultPartNumber = '6205-2RSH';
+      defaultManufacturer = 'SKF';
+      defaultMachineId = 'mach-conveyor-main';
+      defaultMachineName = 'Primary Bottling & Palletizing Conveyor';
+      defaultQuantity = 4;
+      defaultSpecs = '25mm bore, 52mm OD, 15mm width, dual contact nitrile seals (2RS), 14.8 kN dynamic load, ISO 492';
+    } else if (q.includes('motor') || q.includes('vfd') || q.includes('induction') || q.includes('drive')) {
+      categoryKey = 'motor';
+      defaultPartName = 'Low Voltage 3-Phase AC Induction Motor 3.0kW';
+      defaultPartNumber = '1LE1001-1DB22-2AA4';
+      defaultManufacturer = 'Siemens';
+      defaultMachineId = 'mach-pump-skid';
+      defaultMachineName = 'Centrifugal Coolant Pumping Skid #3';
+      defaultQuantity = 1;
+      defaultSpecs = '3.0 kW (4.0 HP), 400V 50Hz, 1450 RPM, Frame 100L B35 flange/foot, IP55, IEC 60034';
+    } else if (q.includes('valve') || q.includes('pneumatic') || q.includes('solenoid') || q.includes('festo') || q.includes('smc')) {
+      categoryKey = 'valve';
+      defaultPartName = '5/2-Way Directional Solenoid Valve (G 1/4")';
+      defaultPartNumber = 'VUVS-L25-M52-MD-G14-F8-1C1';
+      defaultManufacturer = 'Festo';
+      defaultMachineId = 'mach-pick-place';
+      defaultMachineName = 'High-Speed Robotic Pick & Place Cell';
+      defaultQuantity = 2;
+      defaultSpecs = '5/2 monostable, 24V DC pilot solenoid, 1000 L/min flow rate, G 1/4" BSPP ports, ISO 5599';
+    } else if (q.includes('cable') || q.includes('m12') || q.includes('cordset') || q.includes('connector') || q.includes('phoenix')) {
+      categoryKey = 'cable';
+      defaultPartName = 'M12 4-Pin Shielded Sensor Cable (5.0m PUR)';
+      defaultPartNumber = 'SAC-4P-5,0-PUR/M12FS';
+      defaultManufacturer = 'Phoenix Contact';
+      defaultMachineId = 'mach-robot-weld';
+      defaultMachineName = 'Automated Spot Welding Robot Cell';
+      defaultQuantity = 10;
+      defaultSpecs = 'A-coded female straight socket, 4-pin gold contacts, 5.0m oil-resistant halogen-free PUR, IP67/IP69K';
+    } else if (q.includes('sensor') || q.includes('igt') || q.includes('bes') || q.includes('omron') || q.includes('balluff') || q.includes('ifm')) {
+      categoryKey = 'sensor';
+      defaultPartName = 'M18 Inductive Proximity Sensor (8mm Flush)';
+      defaultPartNumber = 'IGT205';
+      defaultManufacturer = 'ifm efector';
+      defaultMachineId = 'mach-line4';
+      defaultMachineName = 'Automated Assembly Line 4';
+      defaultQuantity = 2;
+      defaultSpecs = 'M18x1 threaded, 8.0mm sensing range flush, PNP NO, 10-30V DC, 4-pin M12 connector, IP68/IP69K';
     }
 
-    const searchId = isNail ? 'req-nail' : `req-search-${Date.now()}`;
-    const newReqNumber = isNail ? 'REQ-2026-NAIL' : `REQ-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const searchId = `req-${categoryKey}-${Date.now()}`;
+    const newReqNumber = `REQ-2026-${categoryKey.toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
 
     const newReq: PartRequest = {
       id: searchId,
       requestNumber: newReqNumber,
-      machineId: isNail ? 'mach-crate-line2' : 'mach-general-asset',
-      machineName: isNail ? 'Automated Packaging & Crating Unit (Line 2)' : 'General Facility Asset Line',
-      partName: isNail ? 'Common Steel Wire Fastener Nail (10D)' : trimmed,
-      originalPartNumber: isNail ? '97990A110' : trimmed.toUpperCase(),
-      manufacturer: isNail ? 'McMaster-Carr' : 'Industrial Catalog Supplier',
-      quantityNeeded: isNail ? 250 : 1,
+      machineId: defaultMachineId,
+      machineName: defaultMachineName,
+      partName: defaultPartName,
+      originalPartNumber: defaultPartNumber,
+      manufacturer: defaultManufacturer,
+      quantityNeeded: defaultQuantity,
       urgency: 'Line Down (Critical)',
       acceptableAlternatives: true,
-      customRequirements: isNail ? '3.0 inch length, 9 gauge 0.148 in shank, corrosion resistant' : `Compatible replacement for ${trimmed}`,
+      customRequirements: defaultSpecs,
       createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
       status: 'Researching',
-      targetComponentId: `part-${trimmed.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+      targetComponentId: `part-${categoryKey}`,
       trackingNotes: [
         {
           timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
           author: currentUser?.name || 'Engineer',
-          text: `Initiated catalog search for "${trimmed}".`,
+          text: `Initiated catalog intelligence search for "${trimmed}" (${defaultPartName}).`,
         },
       ],
     };
@@ -658,6 +725,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem('partscout_requests', JSON.stringify(next));
       } catch {}
       return next;
+    });
+
+    // Notify backend asynchronously to prepare search index
+    createSearch({
+      part_number: defaultPartNumber,
+      manufacturer: defaultManufacturer,
+      item_description: defaultPartName,
+      equipment_context: defaultMachineName,
+      urgency: 'critical',
+      target_price: 250,
+      lead_time_days_max: 3,
+    }).catch(() => {
+      // Backend sync fallback is handled automatically
     });
 
     addToast('Search Initialized', `Catalog search started for "${trimmed}".`, 'info');
@@ -887,7 +967,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const totalMistakesPrevented = guardrails.reduce((acc, g) => acc + (g.active ? g.preventedMistakeCount : 0), 0);
 
-  const allParts = [TARGET_ORIGINAL_PART, ...CANDIDATE_COMPONENTS];
+  const [discoveredParts, setDiscoveredParts] = useState<ComponentItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('partscout_discovered_parts');
+      const parsed = stored ? JSON.parse(stored) : [];
+      const map = new Map<string, ComponentItem>();
+      [...CATEGORY_PRESET_PARTS, ...parsed].forEach((p) => map.set(p.id, p));
+      return Array.from(map.values());
+    } catch {
+      return CATEGORY_PRESET_PARTS;
+    }
+  });
+
+  const registerDiscoveredParts = useCallback((newParts: ComponentItem[]) => {
+    setDiscoveredParts((prev) => {
+      const map = new Map<string, ComponentItem>();
+      prev.forEach((p) => map.set(p.id, p));
+      newParts.forEach((p) => map.set(p.id, p));
+      const updated = Array.from(map.values());
+      try {
+        localStorage.setItem('partscout_discovered_parts', JSON.stringify(updated.slice(0, 100)));
+      } catch {}
+      return updated;
+    });
+  }, []);
+
+  const allParts = [TARGET_ORIGINAL_PART, ...CANDIDATE_COMPONENTS, ...discoveredParts];
 
   return (
     <AppContext.Provider
@@ -901,6 +1006,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         targetPart: TARGET_ORIGINAL_PART,
         candidates: CANDIDATE_COMPONENTS,
         allParts,
+        discoveredParts,
+        registerDiscoveredParts,
         requests,
         suppliers: MOCK_SUPPLIERS,
         quotations,
