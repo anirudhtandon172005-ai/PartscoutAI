@@ -617,58 +617,39 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
       </div>
 
       {/* Targeted Distributor Scraping Whitelist Bar */}
-      <div
-        className="card p-3 mb-4"
-        style={{
-          background: 'radial-gradient(ellipse at 20% 50%, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)',
-          border: '1px solid rgba(20, 184, 166, 0.35)',
-          borderRadius: '14px',
-          boxShadow: '0 8px 24px -4px rgba(15, 23, 42, 0.3)',
-        }}
-      >
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-          <div className="flex items-center gap-2">
-            <Globe size={16} className="text-teal" />
-            <span className="text-white font-semibold text-xs uppercase tracking-wider">
-              Targeted Industrial Scraping Whitelist ({SPECIFIC_INDUSTRIAL_SOURCES.length} Verified Sources)
-            </span>
-            <span className="badge-tag live-cad" style={{ fontSize: '10px', padding: '2px 8px' }}>
-              Specific Sites Only • Zero Open-Web Noise
+      <div className="targeted-whitelist-panel">
+        <div className="whitelist-header-row">
+          <div>
+            <div className="whitelist-title-group">
+              <Globe size={18} className="whitelist-icon" />
+              <h3 className="whitelist-heading">
+                Targeted Industrial Scraping Whitelist ({SPECIFIC_INDUSTRIAL_SOURCES.length} Verified Sources)
+              </h3>
+              <span className="whitelist-badge">
+                Specific Sites Only • Zero Open-Web Noise
+              </span>
+            </div>
+            <span className="whitelist-subtitle">
+              Autonomous TinyFish Web Agents extract live pricing & stock directly from verified catalog portals
             </span>
           </div>
-          <span className="text-xs text-slate-400">
-            Autonomous TinyFish Web Agents extract live pricing & stock directly from verified catalog portals
-          </span>
         </div>
 
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="whitelist-grid">
           {SPECIFIC_INDUSTRIAL_SOURCES.map((source) => {
             const isSelected = selectedSourceToScrape === source.id && showTargetedDrawer;
             return (
               <button
                 key={source.id}
                 type="button"
-                style={{
-                  fontSize: '11px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  transition: 'all 0.18s ease',
-                  backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.4)' : 'rgba(30, 41, 59, 0.85)',
-                  border: isSelected ? '1px solid #14b8a6' : '1px solid rgba(148, 163, 184, 0.25)',
-                  color: isSelected ? '#5eead4' : '#f1f5f9',
-                  boxShadow: isSelected ? '0 0 10px rgba(20, 184, 166, 0.3)' : 'none',
-                }}
+                className={`whitelist-source-btn ${isSelected ? 'active' : ''}`}
                 onClick={() => handleRunTargetedDistributorScrape(source.id)}
                 disabled={scrapeInProgress}
                 title={`Click to scrape live specs & stock from ${source.name}`}
               >
-                <Check size={12} className={isSelected ? 'text-teal font-bold' : 'text-teal'} />
-                <span className="font-semibold text-slate-100">{source.name}</span>
-                <span style={{ color: '#94a3b8', fontSize: '10px' }}>({source.domain})</span>
+                <Check size={14} className={isSelected ? 'text-teal font-bold' : 'text-teal'} />
+                <span>{source.name}</span>
+                <span className="source-domain">({source.domain})</span>
               </button>
             );
           })}
@@ -676,17 +657,18 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
 
         {/* Live Scrape Result Drawer */}
         {showTargetedDrawer && (
-          <div className="mt-3 pt-3 border-t border-slate-700/50">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <RefreshCw size={13} className={scrapeInProgress ? 'spin text-teal' : 'text-slate-400'} />
-                <span className="text-xs font-semibold text-white">
+          <div className="whitelist-drawer">
+            <div className="whitelist-drawer-header">
+              <div className="whitelist-drawer-title">
+                <RefreshCw size={14} className={scrapeInProgress ? 'spin text-teal' : 'text-teal'} />
+                <span>
                   {scrapeInProgress ? `TinyFish Agent crawling ${selectedSourceToScrape}...` : `Live Extraction: ${selectedSourceToScrape}`}
                 </span>
               </div>
               <button
                 type="button"
-                className="btn btn-ghost btn-xs text-xs text-slate-400"
+                className="btn btn-ghost btn-xs"
+                style={{ color: '#94a3b8' }}
                 onClick={() => setShowTargetedDrawer(false)}
               >
                 Close
@@ -694,21 +676,21 @@ export const SearchResultsPage: React.FC<{ requestId?: string }> = ({ requestId 
             </div>
 
             {scrapeInProgress && (
-              <div className="p-3 rounded bg-slate-900/60 border border-slate-800 text-xs text-slate-300 flex items-center gap-2">
+              <div className="whitelist-drawer-box" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div className="spinner-small"></div>
-                <span>Executing headless browser session against whitelisted catalog page...</span>
+                <span style={{ color: '#cbd5e1' }}>Executing headless browser session against whitelisted catalog page...</span>
               </div>
             )}
 
             {scrapeLiveResult && !scrapeInProgress && (
-              <div className="p-3 rounded bg-slate-900/90 border border-teal-500/30 text-xs">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-teal font-semibold">
+              <div className={`whitelist-drawer-box ${scrapeLiveResult.success ? 'success' : ''}`}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                  <span style={{ color: '#2dd4bf', fontWeight: 600 }}>
                     {scrapeLiveResult.success ? '✓ Successfully Extracted Catalog Data' : 'Notice: Catalog Extraction Verified'}
                   </span>
                   <span className="text-muted-xs">{scrapeLiveResult.target_url}</span>
                 </div>
-                <p className="text-slate-300 m-0 mb-1">
+                <p style={{ color: '#e2e8f0', margin: '0 0 0.35rem 0' }}>
                   {scrapeLiveResult.result?.result || scrapeLiveResult.error || 'Clean specifications, real-time stock, and distributor catalog verified.'}
                 </p>
                 {scrapeLiveResult.run_id && (
