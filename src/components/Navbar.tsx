@@ -188,7 +188,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
             >
               <div className="role-avatar-wrapper">
                 <div className="role-avatar">
-                  {userRole === 'admin' ? 'SJ' : userRole === 'procurement' ? 'EG' : 'MV'}
+                  {(currentUser.name || 'U')
+                    .split(' ')
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((p) => p[0].toUpperCase())
+                    .join('')}
                 </div>
                 <span className="role-status-dot"></span>
               </div>
@@ -211,7 +216,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
                 onMouseLeave={() => setRoleDropdownOpen(false)}
               >
                 <div className="role-menu-header">
-                  <span className="menu-header-label">Switch Persona Sandbox</span>
+                  <div className="user-profile-header-strip mb-2">
+                    <strong style={{ display: 'block', color: '#FFFFFF', fontSize: '0.88rem' }}>{currentUser.name}</strong>
+                    <small style={{ color: '#94A3B8', fontSize: '0.72rem' }}>{currentUser.email}</small>
+                  </div>
+                  <span className="menu-header-label">Switch Role Sandbox</span>
                 </div>
 
                 <button
@@ -225,7 +234,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
                 >
                   <div className="role-option-info">
                     <div className="option-title-row">
-                      <strong>Marcus Vance</strong>
+                      <strong>{userRole === 'engineer' && currentUser.name ? currentUser.name : 'Marcus Vance'}</strong>
                       {userRole === 'engineer' && (
                         <span className="active-pill">Active</span>
                       )}

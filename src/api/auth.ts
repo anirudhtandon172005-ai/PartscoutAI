@@ -39,7 +39,6 @@ export async function verifyBackendToken(accessToken: string): Promise<TokenVeri
 
     return await res.json();
   } catch (error) {
-    console.warn('Backend token verification fell back to local session:', error);
     // Graceful fallback for local development if backend server is offline
     const role = accessToken.includes('admin')
       ? 'admin'
@@ -47,14 +46,45 @@ export async function verifyBackendToken(accessToken: string): Promise<TokenVeri
       ? 'procurement'
       : 'engineer';
 
+    let fallbackName = role === 'admin' ? 'Sarah Jenkins' : role === 'procurement' ? 'Elena Gomez' : 'Marcus Vance';
+    let fallbackEmail = `${role}@apexpack.internal`;
+    let fallbackPlant = 'Apex PackWorks - Main Plant (Facility B4)';
+
+    // 1. Try reading from locally saved user profile
+    try {
+      const stored = localStorage.getItem('partscout_custom_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.name) fallbackName = parsed.name;
+        if (parsed.email) fallbackEmail = parsed.email;
+        if (parsed.plantSite) fallbackPlant = parsed.plantSite;
+      }
+    } catch {
+      // ignore
+    }
+
+    // 2. Try decoding JWT payload for user_metadata
+    try {
+      const parts = accessToken.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload.user_metadata?.name) fallbackName = payload.user_metadata.name;
+        else if (payload.user_metadata?.full_name) fallbackName = payload.user_metadata.full_name;
+        if (payload.user_metadata?.plant_site) fallbackPlant = payload.user_metadata.plant_site;
+        if (payload.email) fallbackEmail = payload.email;
+      }
+    } catch {
+      // ignore
+    }
+
     return {
       valid: true,
       user: {
         id: `usr-${role}-local`,
-        email: `${role}@apexpack.internal`,
-        name: role === 'admin' ? 'Sarah Jenkins' : role === 'procurement' ? 'Elena Gomez' : 'Marcus Vance',
+        email: fallbackEmail,
+        name: fallbackName,
         role,
-        plant_site: 'Apex PackWorks - Main Plant (Facility B4)',
+        plant_site: fallbackPlant,
       },
       message: 'Verified locally (offline backend fallback mode)',
     };

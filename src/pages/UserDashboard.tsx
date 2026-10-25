@@ -364,7 +364,7 @@ export const UserDashboard: React.FC = () => {
                 <div className="timeline-content">
                   <span className="timeline-time tech-font">Today 09:50 UTC</span>
                   <div className="timeline-text">
-                    <strong>Marcus Vance</strong> reviewed Radwell surplus quote ($94.50) for Balluff sensor.
+                    <strong>{currentUser.name}</strong> reviewed Radwell surplus quote ($94.50) for Balluff sensor.
                   </div>
                 </div>
               </div>
@@ -384,7 +384,7 @@ export const UserDashboard: React.FC = () => {
                 <div className="timeline-content">
                   <span className="timeline-time tech-font">Today 07:30 UTC</span>
                   <div className="timeline-text">
-                    <strong>Marcus Vance</strong> created line-down emergency request <strong>REQ-2026-0891</strong>.
+                    <strong>{currentUser.name}</strong> created line-down emergency request <strong>REQ-2026-0891</strong>.
                   </div>
                 </div>
               </div>
