@@ -25,7 +25,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOpen }) => {
-  const { currentRoute, navigate, userRole, setUserRole, currentUser, requests, signOutFromSupabase } = useApp();
+  const { currentRoute, navigate, userRole, setUserRole, currentUser, requests, signOutFromSupabase, executeQuickSearch } = useApp();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [navSearch, setNavSearch] = useState('');
 
@@ -34,10 +34,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, mobileMenuOp
 
   const activeRequest = requests[0]; // Line 4 proximity sensor request
 
-  const handleNavSearch = (e: React.FormEvent) => {
+  const handleNavSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (navSearch.trim().length > 0) {
-      navigate('/app/results/req-line4-sensor');
+      const searchId = await executeQuickSearch(navSearch);
+      navigate(`/app/results/${searchId}`);
+      setNavSearch('');
     }
   };
 

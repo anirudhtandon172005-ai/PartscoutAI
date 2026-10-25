@@ -32,19 +32,21 @@ import {
 } from 'lucide-react';
 
 export const LandingPage: React.FC = () => {
-  const { navigate, targetPart, candidates, setActiveEvidence, addToast } = useApp();
+  const { navigate, targetPart, candidates, setActiveEvidence, addToast, executeQuickSearch } = useApp();
   const sampleCandidate = candidates[0]; // ifm IGT205
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Industrial Categories');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  const handleHeroSearch = (e: React.FormEvent) => {
+  const handleHeroSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim().length > 0) {
-      addToast('Search Initialized', `Querying industrial catalogs for "${searchQuery}"...`, 'info');
+      const searchId = await executeQuickSearch(searchQuery);
+      navigate(`/app/results/${searchId}`);
+    } else {
+      navigate('/app/results/req-line4-sensor');
     }
-    navigate('/app/results/req-line4-sensor');
   };
 
   const categories = [

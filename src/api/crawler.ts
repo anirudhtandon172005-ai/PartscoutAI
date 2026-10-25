@@ -21,7 +21,7 @@ export const SPECIFIC_INDUSTRIAL_SOURCES: SpecificSource[] = [
     id: 'mcmaster',
     name: 'McMaster-Carr',
     domain: 'mcmaster.com',
-    url_template: 'https://www.mcmaster.com/products/{part_number}',
+    url_template: 'https://www.mcmaster.com/{part_number}',
     category: 'Direct Industrial Catalog',
     reliability: 'Very High',
     typical_delivery: 'Next Day',

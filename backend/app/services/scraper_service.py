@@ -114,7 +114,15 @@ class TinyFishScraperService:
         if not source_match:
             source_match = self.specific_sources[0]  # McMaster fallback
 
-        target_url = source_match["url_template"].format(part_number=part_number)
+        clean_part = part_number.strip()
+        # If McMaster: https://www.mcmaster.com/{part_number} handles both part numbers and search queries
+        if source_match["id"] == "mcmaster":
+            target_url = f"https://www.mcmaster.com/{clean_part}"
+        elif source_match["id"] == "ifm" and not re.match(r"^[A-Z0-9]{3,8}$", clean_part, re.I):
+            target_url = f"https://www.ifm.com/us/en/search?query={clean_part}"
+        else:
+            target_url = source_match["url_template"].format(part_number=clean_part)
+
         return source_match, target_url
 
     async def scrape_specific_source(

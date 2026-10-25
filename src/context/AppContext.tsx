@@ -79,6 +79,7 @@ interface AppContextType {
   updateDraftRequest: (updates: Partial<DraftRequestData>) => void;
   resetDraftRequest: () => void;
   submitDraftRequest: () => Promise<string>; // returns new search ID
+  executeQuickSearch: (query: string) => Promise<string>;
   addRequestNote: (requestId: string, text: string) => void;
   updateRequestStatus: (requestId: string, status: PartRequest['status']) => void;
   addQuotation: (quote: Omit<Quotation, 'id' | 'rfqNumber' | 'quotedAt'>) => void;
@@ -570,10 +571,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const searchId = response.id;
 
       // Also create a local request record for tracking
-      const newId = `req-${Date.now()}`;
       const newReqNumber = `REQ-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       const newReq: PartRequest = {
-        id: newId,
+        id: searchId,
         requestNumber: newReqNumber,
         machineId: draftRequest.machineId,
         machineName: selectedMachine ? `${selectedMachine.model} (${selectedMachine.productionLine})` : (draftRequest.customMachineName || 'General Facility Asset'),
@@ -586,7 +586,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         customRequirements: draftRequest.customRequirements,
         createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
         status: 'Researching',
-        targetComponentId: 'part-balluff-bes516',
+        targetComponentId: `part-${draftRequest.partName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
         trackingNotes: [
           {
             timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
@@ -608,6 +608,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('Error', `Failed to initiate search: ${error instanceof Error ? error.message : 'Unknown error'}`, 'warning');
       throw error;
     }
+  };
+
+  const executeQuickSearch = async (query: string): Promise<string> => {
+    const trimmed = query.trim();
+    const isNail = trimmed.toLowerCase().includes('nail') || trimmed.toLowerCase().includes('fastener');
+    
+    // Check if an existing matching request exists
+    const existing = requests.find((r) =>
+      (isNail && (r.partName?.toLowerCase().includes('nail') || r.originalPartNumber?.toLowerCase().includes('nail') || r.id.toLowerCase().includes('nail'))) ||
+      r.originalPartNumber?.toLowerCase() === trimmed.toLowerCase() ||
+      r.partName?.toLowerCase().includes(trimmed.toLowerCase())
+    );
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const searchId = isNail ? 'req-nail' : `req-search-${Date.now()}`;
+    const newReqNumber = isNail ? 'REQ-2026-NAIL' : `REQ-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const newReq: PartRequest = {
+      id: searchId,
+      requestNumber: newReqNumber,
+      machineId: isNail ? 'mach-crate-line2' : 'mach-general-asset',
+      machineName: isNail ? 'Automated Packaging & Crating Unit (Line 2)' : 'General Facility Asset Line',
+      partName: isNail ? 'Common Steel Wire Fastener Nail (10D)' : trimmed,
+      originalPartNumber: isNail ? '97990A110' : trimmed.toUpperCase(),
+      manufacturer: isNail ? 'McMaster-Carr' : 'Industrial Catalog Supplier',
+      quantityNeeded: isNail ? 250 : 1,
+      urgency: 'Line Down (Critical)',
+      acceptableAlternatives: true,
+      customRequirements: isNail ? '3.0 inch length, 9 gauge 0.148 in shank, corrosion resistant' : `Compatible replacement for ${trimmed}`,
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      status: 'Researching',
+      targetComponentId: `part-${trimmed.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+      trackingNotes: [
+        {
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          author: currentUser?.name || 'Engineer',
+          text: `Initiated catalog search for "${trimmed}".`,
+        },
+      ],
+    };
+
+    setRequests((prev) => {
+      const next = [newReq, ...prev.filter((r) => r.id !== newReq.id)];
+      try {
+        localStorage.setItem('partscout_requests', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    addToast('Search Initialized', `Catalog search started for "${trimmed}".`, 'info');
+    return searchId;
   };
 
   // Quotations
@@ -860,6 +914,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateDraftRequest,
         resetDraftRequest,
         submitDraftRequest,
+        executeQuickSearch,
         addRequestNote,
         updateRequestStatus,
         addQuotation,
