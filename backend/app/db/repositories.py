@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 import enum
-from sqlalchemy import select, update, delete
+import hashlib
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,7 +25,7 @@ from app.db.models import (
     DataQualityIssue,
     SavedPart,
 )
-from app.schemas import SearchCreateRequest, CandidateResponse, CandidateEvidence
+from app.schemas import SearchCreateRequest, CandidateResponse, CandidateEvidence, CandidateOffer
 
 
 class SearchRepository:
@@ -65,6 +66,14 @@ class SearchRepository:
         )
         return result.scalar_one_or_none()
 
+    async def count_active_searches(self) -> int:
+        result = await self.session.execute(
+            select(func.count(SearchRecord.id)).where(
+                SearchRecord.status.in_([SearchStatus.QUEUED, SearchStatus.RUNNING])
+            )
+        )
+        return int(result.scalar_one())
+
     async def update_search_status(
         self,
         search_id: str,
@@ -102,6 +111,13 @@ class SearchRepository:
         workspace_id: str | None = None,
     ) -> List[SearchCandidate]:
         """Save candidates for a search."""
+        candidate_ids = [candidate.id for candidate in candidates]
+        # Supplier offers are linked to candidates and must be replaced along
+        # with them when a search is re-run.
+        if candidate_ids:
+            await self.session.execute(
+                delete(SupplierOffer).where(SupplierOffer.candidate_id.in_(candidate_ids))
+            )
         # Delete existing candidates for this search (cascade will handle evidence)
         await self.session.execute(
             delete(SearchCandidate).where(SearchCandidate.search_id == search_id)
@@ -109,6 +125,12 @@ class SearchRepository:
 
         saved_candidates = []
         for candidate in candidates:
+            persisted_offers = []
+            for offer in candidate.offers:
+                supplier_key = f"{offer.supplier_name}|{offer.supplier_domain}".lower().encode()
+                persisted_offers.append(offer.model_copy(update={
+                    "supplier_id": offer.supplier_id or f"supp-{hashlib.sha1(supplier_key).hexdigest()[:16]}"
+                }))
             candidate_record = SearchCandidate(
                 id=candidate.id,
                 workspace_id=workspace_id,
@@ -118,6 +140,7 @@ class SearchRepository:
                 compatibility=Compatibility(candidate.compatibility),
                 score=candidate.score,
                 specifications_json=candidate.specifications,
+                offers_json=[offer.model_dump(mode="json") for offer in persisted_offers],
                 created_at=datetime.now(timezone.utc),
             )
             self.session.add(candidate_record)
@@ -132,9 +155,74 @@ class SearchRepository:
                     quote=ev.quote,
                     source_url=str(ev.source_url),
                     confidence=ev.confidence,
+                    retrieved_at=ev.retrieved_at,
                     created_at=datetime.now(timezone.utc),
                 )
                 self.session.add(evidence_record)
+
+            # Persist only procurement-ready listings. The candidate JSON
+            # still retains partial source observations, but supplier tables
+            # must never contain fabricated zero/default values.
+            for offer_index, offer in enumerate(persisted_offers):
+                if (
+                    offer.reported_price is None
+                    or not offer.currency
+                    or not offer.stock_status
+                    or offer.lead_time_days is None
+                    or offer.min_order_quantity is None
+                    or not offer.evidence_quote
+                    or offer.confidence is None
+                ):
+                    continue
+                supplier_key = f"{offer.supplier_name}|{offer.supplier_domain}".lower().encode()
+                supplier_id = offer.supplier_id or f"supp-{hashlib.sha1(supplier_key).hexdigest()[:16]}"
+                supplier = await self.session.get(Supplier, supplier_id)
+                if supplier is None:
+                    supplier = Supplier(
+                        id=supplier_id,
+                        workspace_id=workspace_id,
+                        name=offer.supplier_name,
+                        domain=offer.supplier_domain,
+                        type=offer.supplier_type,
+                        direct_phone=offer.contact_phone,
+                        support_email=offer.contact_email,
+                        website_url=str(offer.product_url or offer.source_url),
+                        contact_disclaimer="Contact details and availability are source observations; confirm directly before procurement.",
+                    )
+                    self.session.add(supplier)
+
+                self.session.add(SupplierOffer(
+                    id=f"offer-{candidate.id}-{offer_index}",
+                    workspace_id=workspace_id,
+                    supplier_id=supplier_id,
+                    candidate_id=candidate.id,
+                    part_id=None,
+                    part_number=candidate.part_number,
+                    supplier_name=offer.supplier_name,
+                    supplier_domain=offer.supplier_domain,
+                    supplier_type=offer.supplier_type,
+                    location=offer.location,
+                    reported_price=offer.reported_price,
+                    currency=offer.currency,
+                    stock_status=offer.stock_status,
+                    quantity_available=offer.quantity_available,
+                    lead_time_days=offer.lead_time_days,
+                    min_order_quantity=offer.min_order_quantity,
+                    source_url=str(offer.source_url),
+                    last_checked=offer.last_checked,
+                    freshness=offer.freshness,
+                    notes=offer.notes,
+                ))
+                self.session.add(CandidateEvidenceRecord(
+                    workspace_id=workspace_id,
+                    candidate_id=candidate.id,
+                    field="supplier_offer",
+                    quote=offer.evidence_quote,
+                    source_url=str(offer.source_url),
+                    confidence=offer.confidence,
+                    retrieved_at=offer.last_checked,
+                    created_at=datetime.now(timezone.utc),
+                ))
 
         await self.session.flush()
         return saved_candidates
@@ -423,6 +511,7 @@ def search_candidate_to_schema(candidate: SearchCandidate) -> CandidateResponse:
             quote=ev.quote,
             source_url=ev.source_url,
             confidence=ev.confidence,
+            retrieved_at=ev.retrieved_at,
         )
         for ev in candidate.evidence
     ]
@@ -435,4 +524,5 @@ def search_candidate_to_schema(candidate: SearchCandidate) -> CandidateResponse:
         score=candidate.score,
         specifications=candidate.specifications_json,
         evidence=evidence_list,
+        offers=[CandidateOffer.model_validate(offer) for offer in (candidate.offers_json or [])],
     )

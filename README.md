@@ -9,7 +9,8 @@ A high-fidelity, responsive industrial software prototype engineered for factory
 - **Frontend**: React 19 + TypeScript + Vite
 - **Styling**: Bespoke Vanilla CSS Design System with custom industrial tokens (`Space Grotesk`, `Inter`, `JetBrains Mono`, Parchment `#F7F5F0`, Deep Ink `#12161A`, Mineral Teal `#117A65`, and Safety Orange `#D9531E`)
 - **3D Digital Twin**: Interactive [Three.js](https://threejs.org/) model of an IEC 60947-5-2 compliant M18 shielded proximity sensor (CAD wireframe mode, exploded assembly view, steel target flag detection simulation, and annotated hotspots)
-- **State & Storage**: React Context + browser `localStorage` persistence for active requests, saved components, shift notes, custom quotations, and targeted source registries
+- **State & Storage**: FastAPI persistence for searches, evidence, equipment, suppliers, and offers; React Context for session/UI state
+- **Search pipeline**: FastAPI lifecycle worker with fixture and opt-in TinyFish/NVIDIA provider adapters
 - **Icons**: Lucide React engineering iconography
 
 ---
@@ -67,6 +68,47 @@ The prototype models an authentic industrial engineering failure:
 
 ---
 
+## Runtime configuration
+
+Use the repository-root `.env.example` for the browser and `backend/.env.example` for the API. The backend resolves `backend/.env` from the project path, so startup does not depend on the current directory.
+
+Local tests use:
+
+```text
+DATABASE_PROVIDER=sqlite
+SEARCH_PROVIDER=fixture
+LLM_PROVIDER=fixture
+```
+
+SQLite is a test/local fallback. A deployed application should use the Supabase profile:
+
+```text
+DATABASE_PROVIDER=supabase
+DATABASE_URL=postgresql+asyncpg://...
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
+SEARCH_PROVIDER=real
+LLM_PROVIDER=nvidia
+```
+
+Apply the Supabase migrations in `supabase/migrations/` before selecting that profile. Keep `DATABASE_URL`, service-role keys, TinyFish keys, and NVIDIA keys backend-only; only the Supabase URL and anon key belong in Vite.
+
+The backend exposes safe runtime diagnostics at `GET /health/details`, including database connectivity, provider names, and whether provider credentials are configured. It never returns key values.
+
+Before deploying, validate the selected profile without printing secrets:
+
+```bash
+backend/.venv/bin/python backend/scripts/validate_runtime.py
+```
+
+When Supabase credentials are available, verify the remote schema before switching the backend:
+
+```bash
+backend/.venv/bin/python backend/scripts/check_supabase_schema.py
+```
+
+This checks the required tables plus the candidate-offer columns added by the later migrations.
+
 ## Running the Application Locally
 
 ### 1. Install Dependencies
@@ -78,7 +120,14 @@ npm install
 ```bash
 npm run dev
 ```
-The application will launch on `http://localhost:5173/` (or the next available port).
+The application will launch on `http://localhost:5175/`.
+
+In a second terminal, start the API from the repository root:
+
+```bash
+cd backend
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
 
 ### 3. Build for Production
 ```bash
@@ -89,7 +138,7 @@ npm run build
 
 ## Data Honesty & Prototype Disclaimers
 
-1. **Illustrative Data**: All supplier stock levels, pricing figures, lead times, and contact information are realistic engineering illustrations.
-2. **Planned Search Integration**: The search crawler is isolated behind a clean service boundary (`src/data/mockData.ts`). Live external web crawlers (such as TinyFish) can be connected without redesigning the interface.
-3. **No Unintentional Telemetry**: Contact supplier actions and RFQ submissions operate locally within browser state and never trigger unverified third-party emails or external form posts.
-4. **Engineering Certification**: Comparison scores represent algorithmic parameter correlation and do not certify equipment interchangeability. Physical and electrical verification by plant engineers is always required.
+1. **Demo isolation**: `VITE_DEMO_MODE=true` enables the visual fixture experience. Live search routes render persisted backend results and show unavailable values when no source-backed data exists.
+2. **Source-backed procurement data**: Price, stock, lead time, and contact observations are persisted only when the source-backed offer contains the required fields; every candidate still carries source evidence and retrieval time.
+3. **No unintentional telemetry**: Contact supplier actions and RFQ submissions do not send unverified third-party messages.
+4. **Engineering certification**: Comparison scores represent algorithmic parameter correlation and do not certify equipment interchangeability. Physical and electrical verification by plant engineers is always required.

@@ -60,6 +60,8 @@ export interface SupplierOffer {
   lastChecked: string | null;
   freshness: 'fresh' | 'moderate' | 'stale'; // fresh < 4h, moderate < 24h, stale > 24h
   notes: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
   createdAt: string;
   updatedAt: string;
 }

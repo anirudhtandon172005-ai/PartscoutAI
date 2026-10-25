@@ -35,6 +35,8 @@ export const UserDashboard: React.FC = () => {
 
   const savedParts = allParts.filter((p) => savedPartIds.includes(p.id));
   const activeRequest = requests[0]; // Line 4 sensor
+  const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+  const criticalRequestCount = requests.filter((request) => request.urgency === 'Line Down (Critical)').length;
 
   return (
     <div className="dashboard-page-root">
@@ -47,7 +49,7 @@ export const UserDashboard: React.FC = () => {
           <span className="welcome-kicker">APEX PACKWORKS • RELIABILITY & SOURCING CONSOLE</span>
           <h1 className="dashboard-title">Welcome back, {currentUser.name}</h1>
           <p className="dashboard-sub">
-            {currentUser.roleTitle} • Connected to 3 plant lines and 14 indexed supplier catalogs.
+            {currentUser.roleTitle} • {demoMode ? 'Connected to 3 plant lines and 14 indexed supplier catalogs.' : `${machines.length} registered machine${machines.length === 1 ? '' : 's'} in the persisted workspace.`}
           </p>
         </div>
 
@@ -71,15 +73,15 @@ export const UserDashboard: React.FC = () => {
             <AlertTriangle size={18} className="text-orange" />
           </div>
           <div className="metric-body">
-            <span className="metric-value tech-font">1</span>
+            <span className="metric-value tech-font">{demoMode ? 1 : criticalRequestCount}</span>
             <span className="metric-unit">Active Alert</span>
           </div>
           <div className="metric-footer">
-            <span className="footer-tag tag-orange">Bottling Line 4 Capper</span>
+            <span className="footer-tag tag-orange">{demoMode ? 'Bottling Line 4 Capper' : 'Persisted workspace requests'}</span>
             <button
               type="button"
               className="metric-link-btn"
-              onClick={() => navigate(`/app/results/${activeRequest.id}`)}
+              onClick={() => navigate('/app/history')}
             >
               Resolve <ArrowRight size={12} />
             </button>
@@ -92,15 +94,15 @@ export const UserDashboard: React.FC = () => {
             <Cpu size={18} className="text-teal" />
           </div>
           <div className="metric-body">
-            <span className="metric-value tech-font">4</span>
-            <span className="metric-unit">Drop-in Alternatives</span>
+            <span className="metric-value tech-font">{demoMode ? 4 : '—'}</span>
+            <span className="metric-unit">{demoMode ? 'Drop-in Alternatives' : 'Search results'}</span>
           </div>
           <div className="metric-footer">
-            <span className="footer-tag tag-teal">Top Match: ifm 96%</span>
+            <span className="footer-tag tag-teal">{demoMode ? 'Top Match: ifm 96%' : 'Open a persisted search to review candidates'}</span>
             <button
               type="button"
               className="metric-link-btn"
-              onClick={() => navigate(`/app/search/${DEMO_SEARCH_ID}/compare/part-ifm-igt205`)}
+              onClick={() => navigate('/app/history')}
             >
               Compare <ArrowRight size={12} />
             </button>
@@ -130,7 +132,7 @@ export const UserDashboard: React.FC = () => {
 
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-label">Illustrative Quotations</span>
+            <span className="metric-label">Supplier Quotations</span>
             <FileSpreadsheet size={18} className="text-teal" />
           </div>
           <div className="metric-body">
@@ -138,7 +140,7 @@ export const UserDashboard: React.FC = () => {
             <span className="metric-unit">Active RFQs</span>
           </div>
           <div className="metric-footer">
-            <span className="footer-tag tag-neutral">Lowest: $92.00</span>
+            <span className="footer-tag tag-neutral">{quotations.length ? 'Persisted workspace quotes' : 'No quotes recorded'}</span>
             <button
               type="button"
               className="metric-link-btn"
@@ -219,7 +221,7 @@ export const UserDashboard: React.FC = () => {
             </div>
 
             {/* Quick Investigation Spotlight Banner */}
-            {activeRequest && (
+            {demoMode && activeRequest && (
               <div className="investigation-spotlight">
                 <div className="spotlight-header">
                   <div className="spotlight-title">
@@ -259,7 +261,7 @@ export const UserDashboard: React.FC = () => {
                 <Building size={16} className="text-muted" />
                 <h3 className="panel-title">Facility Asset Registry (Apex PackWorks)</h3>
               </div>
-              <span className="badge-tag">3 Registered Lines</span>
+              <span className="badge-tag">{machines.length} Registered Machine{machines.length === 1 ? '' : 's'}</span>
             </div>
 
             <div className="machines-grid">

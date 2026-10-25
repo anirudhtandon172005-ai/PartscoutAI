@@ -25,6 +25,9 @@ export const RequestWizard: React.FC<RequestWizardProps> = ({ step }) => {
     resetDraftRequest,
     submitDraftRequest,
     addToast,
+    machinesLoading,
+    machinesError,
+    refreshWorkspaceData,
   } = useApp();
 
   const [useCustomMachine, setUseCustomMachine] = useState(false);
@@ -33,7 +36,7 @@ export const RequestWizard: React.FC<RequestWizardProps> = ({ step }) => {
   // Validation helpers
   const isMachineValid = useCustomMachine
     ? !!(draftRequest.customMachineName && draftRequest.customMachineModel)
-    : !!draftRequest.machineId;
+    : machines.some((machine) => machine.id === draftRequest.machineId);
 
   const isPartValid =
     draftRequest.partName.trim().length > 0 &&
@@ -191,6 +194,28 @@ export const RequestWizard: React.FC<RequestWizardProps> = ({ step }) => {
             </div>
 
             {!useCustomMachine ? (
+              machinesLoading ? (
+                <div className="loading-container">
+                  <div className="spinner-large"></div>
+                  <p>Loading equipment registry…</p>
+                </div>
+              ) : machinesError ? (
+                <div className="error-container">
+                  <AlertTriangle size={32} className="text-red" />
+                  <p>Unable to load equipment registry: {machinesError}</p>
+                  <button type="button" className="btn btn-outline" onClick={() => void refreshWorkspaceData()}>
+                    Retry
+                  </button>
+                </div>
+              ) : machines.length === 0 ? (
+                <div className="empty-state-card">
+                  <Building size={28} className="text-muted" />
+                  <p>No equipment registered. Add a machine in Facility Equipment Registry.</p>
+                  <button type="button" className="btn btn-outline" onClick={() => navigate('/admin/dashboard')}>
+                    Open Equipment Registry
+                  </button>
+                </div>
+              ) : (
               <div className="machine-selector-grid">
                 {machines.map((mach) => (
                   <div
@@ -222,6 +247,7 @@ export const RequestWizard: React.FC<RequestWizardProps> = ({ step }) => {
                   </div>
                 ))}
               </div>
+              )
             ) : (
               <div className="custom-machine-fields">
                 <div className="form-row">

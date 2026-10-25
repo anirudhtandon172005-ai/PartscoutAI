@@ -63,8 +63,14 @@ export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId })
 
   const request = searchStatus?.request;
 
+  // Do not hide a completed provider result by default. Engineers can narrow
+  // the list with the explicit score selector after reviewing the evidence.
+  useEffect(() => {
+    if (searchStatus?.id) setMinMatchScore(0);
+  }, [searchStatus?.id]);
+
   const [inStockOnly, setInStockOnly] = useState(false);
-  const [minMatchScore, setMinMatchScore] = useState(80);
+  const [minMatchScore, setMinMatchScore] = useState(0);
   const [selectedManufacturer, setSelectedManufacturer] = useState('all');
   const [sortBy, setSortBy] = useState<'match' | 'price' | 'leadTime'>('match');
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,7 +85,7 @@ export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId })
         setLoading(true);
         const response = await getCandidates(searchId, controller.signal);
         if (!active) return;
-        const mappedCandidates = response.items.map(mapCandidateToUI);
+        const mappedCandidates = response.items.map((candidate) => mapCandidateToUI(candidate, searchStatus?.request.requirements));
         setCandidates(mappedCandidates);
       } catch (err) {
         if (active && !controller.signal.aborted) {
@@ -96,7 +102,7 @@ export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId })
       active = false;
       controller.abort();
     };
-  }, [searchId]);
+  }, [searchId, searchStatus]);
 
   // Filter candidates
   const filteredCandidates = candidates.filter((item) => {
@@ -170,13 +176,13 @@ export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId })
             <span className="badge-tag live-cad">
               {searchStatus ? `SEARCH ${searchStatus.id}` : 'SEARCH RESULTS'}
             </span>
-            <span className="text-muted-xs">Search executed across 14 targeted sources</span>
+            <span className="text-muted-xs">Backend-verified candidate sources</span>
           </div>
           <h1 className="results-title">
-            Candidate Replacements for {request?.original_part_number || 'Loading...'}
+            Candidate Replacements for {request?.originalPartNumber || 'Loading...'}
           </h1>
           <p className="results-sub">
-            Target: <strong>{request?.part_name || 'Loading...'}</strong> • Facility: {request?.machine_name || 'Loading...'}
+            Target: <strong>{request?.partName || 'Loading...'}</strong> • Facility: {request?.machineName || 'Loading...'}
           </p>
         </div>
 
@@ -210,16 +216,14 @@ export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId })
 
         <div className="baseline-info-col">
           <div className="baseline-title-row">
-            <h4 className="baseline-name">{request?.part_name || 'Loading...'}</h4>
-            <span className="baseline-part-num tech-font">{request?.original_part_number || 'Loading...'}</span>
+            <h4 className="baseline-name">{request?.partName || 'Loading...'}</h4>
+            <span className="baseline-part-num tech-font">{request?.originalPartNumber || 'Loading...'}</span>
             <span className="baseline-mfg">{request?.manufacturer || 'Loading...'}</span>
           </div>
           <div className="baseline-specs-row">
-            <span className="spec-token">M18 x 1.0 Flush</span>
-            <span className="spec-token">Sn = {request?.requirements?.sensing_range_mm || 8} mm</span>
-            <span className="spec-token">{request?.requirements?.output || 'PNP Normally Open'}</span>
-            <span className="spec-token">{request?.requirements?.connector || 'M12 4-Pin'}</span>
-            <span className="spec-token">{request?.requirements?.mounting === 'flush' ? 'Flush Mount' : 'Non-Flush'}</span>
+            {request?.requirements && Object.entries(request.requirements).map(([key, value]) => (
+              <span className="spec-token" key={key}>{key.replaceAll('_', ' ')}: {String(value)}</span>
+            ))}
           </div>
         </div>
 
@@ -251,8 +255,9 @@ export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId })
               id="filter-score"
               className="toolbar-select"
               value={minMatchScore}
-              onChange={(e) => setMinMatchScore(Number(e.target.value))}
+            onChange={(e) => setMinMatchScore(Number(e.target.value))}
             >
+              <option value={0}>All candidates</option>
               <option value={70}>70% and above</option>
               <option value={80}>80% and above (Recommended)</option>
               <option value={90}>90%+ Drop-in Grade Only</option>
@@ -307,13 +312,13 @@ export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId })
         {filteredCandidates.length === 0 ? (
           <div className="empty-results-card">
             <AlertTriangle size={32} className="text-amber" />
-            <h3>No candidates match your current filter settings</h3>
-            <p>Try lowering the minimum match score or clearing manufacturer filters.</p>
+            <h3>{candidates.length === 0 ? 'No candidates were returned for this search' : 'No candidates match your current filter settings'}</h3>
+            <p>{candidates.length === 0 ? 'The provider completed without returning source-backed candidates. Retry the search or inspect the provider status.' : 'Try lowering the minimum match score or clearing manufacturer filters.'}</p>
             <button
               type="button"
               className="btn btn-outline btn-sm mt-3"
               onClick={() => {
-                setMinMatchScore(70);
+                setMinMatchScore(0);
                 setSelectedManufacturer('all');
                 setInStockOnly(false);
                 setSearchQuery('');
@@ -419,7 +424,7 @@ export const SearchResultsPage: React.FC<{ searchId?: string }> = ({ searchId })
 
                       <div className="reported-price-row">
                         <span className="price-currency">{bestOffer.currency}</span>
-                        <span className="price-amount tech-font">${bestOffer.reportedPrice.toFixed(2)}</span>
+                        <span className="price-amount tech-font">{bestOffer.currency} {bestOffer.reportedPrice.toFixed(2)}</span>
                         <span className="price-unit">/ unit</span>
                       </div>
 

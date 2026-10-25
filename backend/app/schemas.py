@@ -20,6 +20,8 @@ class RequirementSpec(BaseModel):
     output: str | None = None
     sensing_range_mm: float | None = Field(default=None, ge=0)
     connector: str | None = None
+    operating_voltage: str | None = None
+    switching_frequency: str | None = None
 
 
 class SearchCreateRequest(BaseModel):
@@ -55,11 +57,61 @@ class SearchStatusResponse(BaseModel):
     error: str | None = None
 
 
+class WorkspaceRequestCreate(BaseModel):
+    """Wire contract for persisting a procurement request."""
+    id: str | None = None
+    request_number: str | None = None
+    machine_id: str | None = None
+    machine_name: str = Field(default="General Facility Asset", max_length=255)
+    part_name: str = Field(min_length=1, max_length=255)
+    original_part_number: str = Field(min_length=1, max_length=255)
+    manufacturer: str = Field(default="", max_length=255)
+    quantity_needed: int = Field(gt=0, le=100000)
+    urgency: Literal["Line Down (Critical)", "Urgent (24-48h)", "Planned Maintenance", "Standard Restock"]
+    acceptable_alternatives: bool = True
+    custom_requirements: str = ""
+    status: Literal["Draft", "Researching", "Candidates Found", "Quote Requested", "Approved", "PO Issued", "Installed"] = "Researching"
+    target_component_id: str | None = None
+
+
 class CandidateEvidence(BaseModel):
     field: str
     quote: str
     source_url: HttpUrl
     confidence: float = Field(ge=0.0, le=1.0)
+    retrieved_at: datetime
+
+
+class CandidateOffer(BaseModel):
+    """A procurement offer extracted from a source page.
+
+    Procurement fields remain optional because a listing may expose stock but
+    not price, or a price but not a contact. The real-provider pipeline only
+    emits offers when the minimum fields needed to identify and verify a
+    listing are present.
+    """
+
+    supplier_name: str
+    supplier_id: str | None = None
+    supplier_domain: str = ""
+    supplier_type: str = "Specialist Stockist"
+    location: str = ""
+    reported_price: float | None = Field(default=None, ge=0)
+    currency: str | None = None
+    stock_status: str | None = None
+    quantity_available: int | None = Field(default=None, ge=0)
+    lead_time_days: int | None = Field(default=None, ge=0)
+    min_order_quantity: int | None = Field(default=None, ge=1)
+    source_url: HttpUrl
+    product_url: HttpUrl | None = None
+    datasheet_url: HttpUrl | None = None
+    last_checked: datetime
+    freshness: Literal["fresh", "moderate", "stale"] = "fresh"
+    contact_phone: str | None = None
+    contact_email: str | None = None
+    evidence_quote: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    notes: str | None = None
 
 
 class CandidateResponse(BaseModel):
@@ -70,6 +122,7 @@ class CandidateResponse(BaseModel):
     score: int = Field(ge=0, le=100)
     specifications: dict[str, object]
     evidence: list[CandidateEvidence]
+    offers: list[CandidateOffer] = Field(default_factory=list)
 
 
 class CandidateListResponse(BaseModel):

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { DemoBadge } from '../components/DemoBadge';
 import { DEMO_SEARCH_ID, DEMO_ADMIN_METRICS } from '../data/mockData';
+import { getHealthDetails, HealthDetails } from '../api/searches';
 import {
   Globe2,
   Activity,
@@ -40,6 +41,7 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
     qualityIssues,
     resolveQualityIssue,
     allParts,
+    machines,
     suppliers,
     navigate,
     addToast,
@@ -75,8 +77,47 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
   const [maskedKey, setMaskedKey] = useState('pk_live_••••••••••••••••••••••••39A8');
   const [tinyFishStatus, setTinyFishStatus] = useState('Planned Service Boundary (Mocked)');
   const [rateLimitPerMinute, setRateLimitPerMinute] = useState(60);
+  const [runtimeHealth, setRuntimeHealth] = useState<HealthDetails | null>(null);
+  const [runtimeHealthError, setRuntimeHealthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (subpage !== 'settings') return;
+    let active = true;
+    void getHealthDetails().then((health) => {
+      if (active) setRuntimeHealth(health);
+    }).catch((error) => {
+      if (active) setRuntimeHealthError(error instanceof Error ? error.message : 'Unable to read backend health.');
+    });
+    return () => { active = false; };
+  }, [subpage]);
 
   const pendingIssues = qualityIssues.filter((q) => !q.resolved);
+  const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+
+  if (!demoMode && subpage === 'dashboard') {
+    return (
+      <div className="admin-page-root">
+        <div className="admin-header-row">
+          <div>
+            <div className="kicker-line"><span className="badge-tag live-cad">SYSTEM ADMINISTRATION & CATALOG HEALTH</span></div>
+            <h1 className="admin-title">Admin Overview & System Health</h1>
+            <p className="admin-sub">Live counts below are read from the persisted workspace and backend services.</p>
+          </div>
+        </div>
+        <div className="metrics-grid">
+          <div className="metric-card"><span className="metric-label">Registered machines</span><span className="metric-value tech-font">{machines.length}</span></div>
+          <div className="metric-card"><span className="metric-label">Source domains</span><span className="metric-value tech-font">{sourceDomains.length}</span></div>
+          <div className="metric-card"><span className="metric-label">Collection jobs</span><span className="metric-value tech-font">{collectionJobs.length}</span></div>
+          <div className="metric-card"><span className="metric-label">Open quality issues</span><span className="metric-value tech-font">{pendingIssues.length}</span></div>
+        </div>
+        <div className="panel-card mt-6">
+          <h3 className="panel-title">Runtime diagnostics</h3>
+          <p className="text-muted-xs">Open API & System Settings to inspect database connectivity and provider configuration.</p>
+          <button type="button" className="btn btn-outline mt-4" onClick={() => navigate('/admin/settings')}>Open runtime settings</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-page-root">
@@ -637,6 +678,33 @@ export const AdminPages: React.FC<AdminViewProps> = ({ subpage }) => {
               <span>
                 <strong>Zero Leakage Security:</strong> All API credentials shown are masked UI placeholders. No live external production keys, TinyFish tokens, or real supplier endpoints are exposed in this client prototype.
               </span>
+            </div>
+
+            <div className="panel-card mt-4">
+              <div className="panel-header">
+                <div className="panel-title-group">
+                  <Database size={16} className="text-teal" />
+                  <h3 className="panel-title">Runtime Diagnostic</h3>
+                </div>
+                <span className={`status-pill ${runtimeHealth?.databaseConnected ? 'status-pill-teal' : 'status-pill-amber'}`}>
+                  {runtimeHealth ? (runtimeHealth.databaseConnected ? 'Connected' : 'Unavailable') : 'Checking…'}
+                </span>
+              </div>
+              {runtimeHealthError ? (
+                <p className="text-muted-xs">{runtimeHealthError}</p>
+              ) : runtimeHealth ? (
+                <div className="settings-fields-stack">
+                  <div className="text-muted-xs tech-font">Database: {runtimeHealth.databaseProvider}{runtimeHealth.databaseHost ? ` (${runtimeHealth.databaseHost})` : ''}</div>
+                  <div className="text-muted-xs tech-font">ORM schema: {runtimeHealth.schemaReady ? 'ready' : `not ready${runtimeHealth.schemaError ? ` (${runtimeHealth.schemaError})` : ''}`}</div>
+                  <div className="text-muted-xs tech-font">Search provider: {runtimeHealth.searchProvider} • LLM: {runtimeHealth.llmProvider}</div>
+                  <div className="text-muted-xs tech-font">TinyFish credentials: {runtimeHealth.tinyfishConfigured ? 'configured' : 'missing'} • NVIDIA credentials/model: {runtimeHealth.nvidiaConfigured ? 'configured' : 'missing'}</div>
+                  {runtimeHealth.configurationWarnings.map((warning) => (
+                    <div key={warning} className="text-muted-xs text-amber">Warning: {warning}</div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-xs">Reading backend identity and connectivity…</p>
+              )}
             </div>
 
             <div className="form-group mt-4">

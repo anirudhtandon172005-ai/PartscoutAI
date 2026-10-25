@@ -78,7 +78,7 @@ export const PartDetailPage: React.FC<{ searchId?: string; candidateId?: string 
         setLoading(true);
         const response = await getCandidates(searchId, controller.signal);
         if (!active) return;
-        const mappedCandidates = response.items.map(mapCandidateToUI);
+        const mappedCandidates = response.items.map((candidate) => mapCandidateToUI(candidate, searchStatus?.request.requirements));
         const found = mappedCandidates.find((c) => c.id === candidateId);
         if (found) {
           setComponent(found);
@@ -101,7 +101,7 @@ export const PartDetailPage: React.FC<{ searchId?: string; candidateId?: string 
       active = false;
       controller.abort();
     };
-  }, [searchId, candidateId]);
+  }, [searchId, candidateId, searchStatus]);
 
   if (loading) {
     return (
@@ -147,7 +147,7 @@ export const PartDetailPage: React.FC<{ searchId?: string; candidateId?: string 
   const isSaved = isPartSaved(component.id);
   const request = searchStatus?.request;
   // Check if this candidate is the baseline (original part)
-  const isBaseline = request?.original_part_number === component.partNumber;
+  const isBaseline = request?.originalPartNumber === component.partNumber;
 
   return (
     <div className="part-detail-root">
@@ -216,7 +216,7 @@ export const PartDetailPage: React.FC<{ searchId?: string; candidateId?: string 
             </div>
             <ThreePartViewer
               partNumber={component.partNumber}
-              manufacturer={`${component.manufacturer} • M18x1.0`}
+              manufacturer={component.manufacturer}
               highlightSpecs={true}
             />
           </div>
@@ -325,11 +325,16 @@ export const PartDetailPage: React.FC<{ searchId?: string; candidateId?: string 
                         <td>
                           <strong>{offer.supplierName}</strong>
                           <div className="text-muted-xs tech-font">{offer.supplierDomain} • {offer.location}</div>
+                          {(offer.contactEmail || offer.contactPhone) && (
+                            <div className="text-muted-xs tech-font">
+                              {offer.contactEmail || offer.contactPhone}
+                            </div>
+                          )}
                           {offer.notes && <div className="offer-note-sm">{offer.notes}</div>}
                         </td>
                         <td>
                           <span className="tech-font font-semibold text-lg">
-                            ${offer.reportedPrice.toFixed(2)}
+                            {offer.currency} {offer.reportedPrice.toFixed(2)}
                           </span>
                           <div className="text-muted-xs">{offer.currency} / MOQ: {offer.minOrderQuantity}</div>
                         </td>
@@ -365,7 +370,7 @@ export const PartDetailPage: React.FC<{ searchId?: string; candidateId?: string 
             ) : (
               <div className="no-offers-box">
                 <AlertTriangle size={24} className="text-amber" />
-                <p>No supplier offers available from API. Integrate supplier feed for live data.</p>
+                <p>No verified supplier offers were returned for this candidate. Confirm availability directly with the source.</p>
               </div>
             )}
 

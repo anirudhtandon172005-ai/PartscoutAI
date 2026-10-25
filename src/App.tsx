@@ -65,14 +65,14 @@ const AppRouter: React.FC = () => {
     }
     if (currentRoute.startsWith('/app/search/') && currentRoute.includes('/parts/')) {
       const parts = currentRoute.split('/');
-      const searchId = parts[2];
-      const candidateId = parts[4];
+      const searchId = parts[3];
+      const candidateId = parts[5];
       return <PartDetailPage searchId={searchId} candidateId={candidateId} />;
     }
     if (currentRoute.startsWith('/app/search/') && currentRoute.includes('/compare/')) {
       const parts = currentRoute.split('/');
-      const searchId = parts[2];
-      const candidateId = parts[4];
+      const searchId = parts[3];
+      const candidateId = parts[5];
       return <ReplacementComparisonPage searchId={searchId} candidateId={candidateId} />;
     }
     if (currentRoute.startsWith('/app/search/')) {

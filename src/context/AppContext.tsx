@@ -14,7 +14,7 @@ import {
   WorkspaceSummary,
   SupplierOffer,
 } from '../types';
-import { createSearch, SearchCreateRequest, getMe, MeResponse as ApiMeResponse } from '../api/searches';
+import { createSearch, SearchCreateRequest, getMe, MeResponse as ApiMeResponse, ApiRequestError } from '../api/searches';
 import {
   getWorkspaceBootstrap,
   setSavedPart as persistSavedPart,
@@ -105,6 +105,8 @@ interface AppContextType {
   activeEvidence: SourceEvidence | null;
   setActiveEvidence: (evidence: SourceEvidence | null) => void;
   isLoading: boolean;
+  machinesLoading: boolean;
+  machinesError: string | null;
   refreshWorkspaceData: () => Promise<void>;
 }
 
@@ -239,22 +241,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [qualityIssues, setQualityIssues] = useState<DataQualityIssue[]>([]);
   const [authReady, setAuthReady] = useState(!supabase);
   const [isLoading, setIsLoading] = useState(false);
+  const [machinesLoading, setMachinesLoading] = useState(true);
+  const [machinesError, setMachinesError] = useState<string | null>(null);
   const [authUser, setAuthUser] = useState<{ id: string; email?: string; user_metadata?: Record<string, string> } | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceSummary | null>(null);
 
   const refreshWorkspaceData = useCallback(async () => {
-    if (!supabase || !authUser) return;
+    const localDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+    if (!localDemoMode && (!supabase || !authUser)) return;
+    setMachinesLoading(true);
+    setMachinesError(null);
     try {
       const bootstrap = await getWorkspaceBootstrap();
-      if (bootstrap.machines.length) setMachines(bootstrap.machines);
-      if (bootstrap.suppliers.length) setSuppliers(bootstrap.suppliers);
-      if (bootstrap.collectionJobs.length) setCollectionJobs(bootstrap.collectionJobs);
-      if (bootstrap.requests.length) setRequests(bootstrap.requests);
-      if (bootstrap.quotations.length) setQuotations(bootstrap.quotations);
-      if (bootstrap.sourceDomains.length) setSourceDomains(bootstrap.sourceDomains);
-      if (bootstrap.qualityIssues.length) setQualityIssues(bootstrap.qualityIssues);
+      setMachines(bootstrap.machines);
+      setSuppliers(bootstrap.suppliers);
+      setCollectionJobs(bootstrap.collectionJobs);
+      setRequests(bootstrap.requests);
+      setQuotations(bootstrap.quotations);
+      setSourceDomains(bootstrap.sourceDomains);
+      setQualityIssues(bootstrap.qualityIssues);
       setSavedPartIds(bootstrap.savedPartIds);
+      setMachinesLoading(false);
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load equipment registry.';
+      setMachinesError(message);
+      setMachinesLoading(false);
       console.error('Failed to refresh workspace data', error);
     }
   }, [authUser]);
@@ -262,11 +273,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Initialize auth and load workspace data
   useEffect(() => {
     const client = supabase;
+    let mounted = true;
     if (!client) {
+      if (import.meta.env.VITE_DEMO_MODE === 'true') {
+        void Promise.all([getMe(), getWorkspaceBootstrap()]).then(([me, bootstrap]) => {
+          if (!mounted) return;
+          setWorkspace(me.workspaces[0] ?? null);
+          setMachines(bootstrap.machines);
+          setSuppliers(bootstrap.suppliers);
+          setCollectionJobs(bootstrap.collectionJobs);
+          setRequests(bootstrap.requests);
+          setQuotations(bootstrap.quotations);
+          setSourceDomains(bootstrap.sourceDomains);
+          setQualityIssues(bootstrap.qualityIssues);
+          setSavedPartIds(bootstrap.savedPartIds);
+          setMachinesLoading(false);
+        }).catch((error) => {
+          setMachinesError(error instanceof Error ? error.message : 'Unable to load equipment registry.');
+          setMachinesLoading(false);
+          console.error('Failed to load local workspace context', error);
+        });
+      } else {
+        setMachinesLoading(false);
+      }
       setAuthReady(true);
       return;
     }
-    let mounted = true;
     const loadSession = async () => {
       const { data } = await client.auth.getSession();
       if (!mounted) return;
@@ -282,17 +314,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           const bootstrap = await getWorkspaceBootstrap();
           if (mounted) {
-            if (bootstrap.machines.length) setMachines(bootstrap.machines);
-            if (bootstrap.suppliers.length) setSuppliers(bootstrap.suppliers);
-            if (bootstrap.collectionJobs.length) setCollectionJobs(bootstrap.collectionJobs);
-            if (bootstrap.requests.length) setRequests(bootstrap.requests);
-            if (bootstrap.quotations.length) setQuotations(bootstrap.quotations);
-            if (bootstrap.sourceDomains.length) setSourceDomains(bootstrap.sourceDomains);
-            if (bootstrap.qualityIssues.length) setQualityIssues(bootstrap.qualityIssues);
+            setMachines(bootstrap.machines);
+            setSuppliers(bootstrap.suppliers);
+            setCollectionJobs(bootstrap.collectionJobs);
+            setRequests(bootstrap.requests);
+            setQuotations(bootstrap.quotations);
+            setSourceDomains(bootstrap.sourceDomains);
+            setQualityIssues(bootstrap.qualityIssues);
             setSavedPartIds(bootstrap.savedPartIds);
+            setMachinesLoading(false);
           }
         } catch (error) {
+          setMachinesError(error instanceof Error ? error.message : 'Unable to load equipment registry.');
+          setMachinesLoading(false);
           console.error('Failed to load workspace context', error);
+        }
+      } else if (import.meta.env.VITE_DEMO_MODE === 'true') {
+        try {
+          const [me, bootstrap] = await Promise.all([getMe(), getWorkspaceBootstrap()]);
+          if (mounted) {
+            setWorkspace(me.workspaces[0] ?? null);
+            setMachines(bootstrap.machines);
+            setSuppliers(bootstrap.suppliers);
+            setCollectionJobs(bootstrap.collectionJobs);
+            setRequests(bootstrap.requests);
+            setQuotations(bootstrap.quotations);
+            setSourceDomains(bootstrap.sourceDomains);
+            setQualityIssues(bootstrap.qualityIssues);
+            setSavedPartIds(bootstrap.savedPartIds);
+            setMachinesLoading(false);
+          }
+        } catch (error) {
+          setMachinesError(error instanceof Error ? error.message : 'Unable to load equipment registry.');
+          setMachinesLoading(false);
+          console.error('Failed to load local workspace context', error);
         }
       }
       setAuthReady(true);
@@ -333,7 +388,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     plantSite: 'Apex PackWorks - Main Plant (Facility B4)',
   };
 
-  const isRemoteWorkspace = Boolean(authUser && workspace && workspace.id !== 'local-demo');
+  const isRemoteWorkspace = Boolean(workspace);
 
   // Saved parts - now from API
   const [savedPartIds, setSavedPartIds] = useState<string[]>([]);
@@ -460,7 +515,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setRequests((prev) => [newReq, ...prev]);
 
       if (isRemoteWorkspace) {
-        void createWorkspaceRequest({
+        await createWorkspaceRequest({
           id: newReq.id,
           requestNumber: newReq.requestNumber,
           machineId: newReq.machineId,
@@ -474,13 +529,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           customRequirements: newReq.customRequirements,
           status: newReq.status,
           targetComponentId: newReq.targetComponentId,
-        }).catch((error) => addToast('Request Save Failed', error instanceof Error ? error.message : 'Unable to persist request.', 'warning'));
+        }).catch((error) => {
+          if (error instanceof ApiRequestError) {
+            const requestRef = error.requestId ? ` Request ID: ${error.requestId}.` : '';
+            addToast('Request Save Failed', `${error.message}${requestRef}`, 'warning');
+          } else {
+            addToast('Request Save Failed', error instanceof Error ? error.message : 'Unable to persist request.', 'warning');
+          }
+        });
       }
 
       addToast('Research Initialized', `Started intelligent discovery for ${newReqNumber}.`, 'success');
       return searchId;
     } catch (error) {
-      addToast('Error', `Failed to initiate search: ${error instanceof Error ? error.message : 'Unknown error'}`, 'warning');
+      const requestRef = error instanceof ApiRequestError && error.requestId ? ` Request ID: ${error.requestId}.` : '';
+      const statusRef = error instanceof ApiRequestError ? ` (HTTP ${error.status})` : '';
+      addToast('Search Failed', `Failed to initiate search${statusRef}: ${error instanceof Error ? error.message : 'Unknown error'}.${requestRef}`, 'warning');
       throw error;
     }
   };
@@ -695,7 +759,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Evidence Drawer modal
   const [activeEvidence, setActiveEvidence] = useState<SourceEvidence | null>(null);
 
-  const allParts = [MOCK_TARGET_PART, ...MOCK_CANDIDATES];
+  const allParts = import.meta.env.VITE_DEMO_MODE === 'true'
+    ? [MOCK_TARGET_PART, ...MOCK_CANDIDATES]
+    : [];
 
   return (
     <AppContext.Provider
@@ -744,6 +810,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeEvidence,
         setActiveEvidence,
         isLoading,
+        machinesLoading,
+        machinesError,
         refreshWorkspaceData,
       }}
     >

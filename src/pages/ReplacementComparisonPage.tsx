@@ -18,6 +18,7 @@ import {
 import { getSearch, getCandidates, CandidateResponse, SearchStatusResponse } from '../api/searches';
 import { mapCandidateToUI } from '../api/candidateAdapter';
 import { ComponentItem, TechnicalSpecification } from '../types';
+import { CANDIDATE_COMPONENTS, DEMO_SEARCH_ID, TARGET_ORIGINAL_PART } from '../data/mockData';
 
 export const ReplacementComparisonPage: React.FC<{ searchId?: string; candidateId?: string }> = ({ searchId, candidateId }) => {
   const { navigate, setActiveEvidence, toggleSavePart, isPartSaved, addToast } = useApp();
@@ -28,10 +29,38 @@ export const ReplacementComparisonPage: React.FC<{ searchId?: string; candidateI
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const addToastRef = useRef(addToast);
+  const isDemoSearch = searchId === DEMO_SEARCH_ID && import.meta.env.VITE_DEMO_MODE === 'true';
 
   // Fetch search status
   useEffect(() => {
     if (!searchId) return;
+    if (isDemoSearch) {
+      setSearchStatus({
+        id: DEMO_SEARCH_ID,
+        status: 'completed',
+        stage: 'evidence_compilation',
+        progressPercent: 100,
+        stageMessage: 'Demonstration search completed',
+        request: {
+          machineName: 'Apex PackWorks Line 4',
+          partName: TARGET_ORIGINAL_PART.name,
+          originalPartNumber: TARGET_ORIGINAL_PART.partNumber,
+          manufacturer: TARGET_ORIGINAL_PART.manufacturer,
+          quantity: 2,
+          requirements: {
+            mounting: 'flush',
+            output: 'PNP normally open',
+            sensingRangeMm: 8,
+            connector: 'M12 4-pin',
+          },
+        },
+        candidateCount: CANDIDATE_COMPONENTS.length,
+        createdAt: '2026-10-24T10:00:00Z',
+        completedAt: '2026-10-24T10:05:00Z',
+        error: null,
+      });
+      return;
+    }
     const controller = new AbortController();
     let active = true;
     const fetchStatus = async () => {
@@ -50,11 +79,17 @@ export const ReplacementComparisonPage: React.FC<{ searchId?: string; candidateI
       active = false;
       controller.abort();
     };
-  }, [searchId]);
+  }, [searchId, isDemoSearch]);
 
   // Fetch candidates
   useEffect(() => {
     if (!searchId) return;
+    if (isDemoSearch) {
+      setCandidates(CANDIDATE_COMPONENTS);
+      setSelectedCandidateId(candidateId || CANDIDATE_COMPONENTS[0]?.id || '');
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     let active = true;
 
@@ -63,7 +98,7 @@ export const ReplacementComparisonPage: React.FC<{ searchId?: string; candidateI
         setLoading(true);
         const response = await getCandidates(searchId, controller.signal);
         if (!active) return;
-        const mappedCandidates = response.items.map(mapCandidateToUI);
+        const mappedCandidates = response.items.map((candidate) => mapCandidateToUI(candidate, searchStatus?.request.requirements));
         setCandidates(mappedCandidates);
         if (mappedCandidates.length > 0 && !selectedCandidateId) {
           setSelectedCandidateId(mappedCandidates[0].id);
@@ -83,7 +118,7 @@ export const ReplacementComparisonPage: React.FC<{ searchId?: string; candidateI
       active = false;
       controller.abort();
     };
-  }, [searchId]);
+  }, [searchId, searchStatus, isDemoSearch, candidateId]);
 
   const candidate = candidates.find((c) => c.id === selectedCandidateId) || candidates[0];
 
@@ -234,13 +269,13 @@ export const ReplacementComparisonPage: React.FC<{ searchId?: string; candidateI
           <div className="card-ribbon ribbon-neutral">ORIGINAL TARGET BASELINE</div>
           <div className="part-header-info">
             <span className="part-mfg-tag">{request?.manufacturer || 'Loading...'}</span>
-            <h3 className="part-number-display tech-font">{request?.original_part_number || 'Loading...'}</h3>
-            <p className="part-name-display">{request?.part_name || 'Loading...'}</p>
+            <h3 className="part-number-display tech-font">{request?.originalPartNumber || 'Loading...'}</h3>
+            <p className="part-name-display">{request?.partName || 'Loading...'}</p>
           </div>
           <div className="part-meta-strip">
-            <span className="meta-pill">M18x1.0 Flush</span>
-            <span className="meta-pill">Sn = {request?.requirements?.sensing_range_mm || 8} mm</span>
-            <span className="meta-pill">{request?.requirements?.output || 'PNP NO DC'}</span>
+            {request?.requirements && Object.entries(request.requirements).map(([key, value]) => (
+              <span className="meta-pill" key={key}>{key.replaceAll('_', ' ')}: {String(value)}</span>
+            ))}
           </div>
         </div>
 
@@ -318,7 +353,7 @@ export const ReplacementComparisonPage: React.FC<{ searchId?: string; candidateI
             <thead>
               <tr>
                 <th style={{ width: '22%' }}>Technical Requirement</th>
-                <th style={{ width: '22%' }}>Original ({request?.original_part_number || 'Loading...'})</th>
+                <th style={{ width: '22%' }}>Original ({request?.originalPartNumber || 'Loading...'})</th>
                 <th style={{ width: '22%' }}>Candidate ({candidate.partNumber})</th>
                 <th style={{ width: '14%' }}>Result</th>
                 <th style={{ width: '20%' }}>Engineering Explanation & Evidence</th>

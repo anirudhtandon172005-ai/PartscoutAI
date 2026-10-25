@@ -12,7 +12,7 @@ from app.db.models import (
     Machine, Part, PartRequest, RequestNote, Supplier, SupplierOffer,
     Quotation, SourceDomain, CollectionJob, DataQualityIssue, SavedPart
 )
-from app.schemas import MeResponse, WorkspaceSummary
+from app.schemas import MeResponse, WorkspaceSummary, WorkspaceRequestCreate
 
 router = APIRouter(prefix="/api/v1", tags=["workspace"])
 
@@ -42,7 +42,7 @@ async def get_me(user: CurrentUserDependency) -> MeResponse:
             email=user.email,
             full_name="Local Demo User",
             facility="Local Demo Plant",
-            workspaces=[WorkspaceSummary(id="local-demo", name="Local Demo Workspace", facility="Local Demo Plant", role="owner")],
+            workspaces=[WorkspaceSummary(id="00000000-0000-0000-0000-000000000002", name="Local Demo Workspace", facility="Local Demo Plant", role="owner")],
         )
 
     async with get_db_session() as session:
@@ -64,9 +64,6 @@ async def get_me(user: CurrentUserDependency) -> MeResponse:
 @router.get("/workspace/bootstrap")
 async def get_workspace_bootstrap(user: CurrentUserDependency) -> dict[str, Any]:
     """Bootstrap workspace data for the frontend."""
-    if settings.database_provider.lower() == "sqlite":
-        return {"machines": [], "parts": [], "requests": [], "suppliers": [], "offers": [], "quotations": [], "source_domains": [], "collection_jobs": [], "quality_issues": [], "saved_part_ids": []}
-
     workspace_id = await get_workspace_id(user)
 
     async with get_db_session() as session:
@@ -164,25 +161,26 @@ async def get_requests(user: CurrentUserDependency):
 
 
 @router.post("/workspace/requests", status_code=status.HTTP_201_CREATED)
-async def create_request(user: CurrentUserDependency, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+async def create_request(user: CurrentUserDependency, body: WorkspaceRequestCreate) -> dict[str, Any]:
     workspace_id = await get_workspace_id(user)
-    request_id = str(body.get("id") or f"req-{uuid4().hex[:12]}")
+    values = body.model_dump()
+    request_id = str(values.get("id") or f"req-{uuid4().hex[:12]}")
 
     request = PartRequest(
         id=request_id,
         workspace_id=workspace_id,
-        machine_id=body.get("machine_id"),
-        request_number=body.get("request_number", f"REQ-{uuid4().hex[:8].upper()}"),
-        machine_name=body.get("machine_name", "General Facility Asset"),
-        part_name=body["part_name"],
-        original_part_number=body["original_part_number"],
-        manufacturer=body.get("manufacturer", ""),
-        quantity_needed=body["quantity_needed"],
-        urgency=body["urgency"],
-        acceptable_alternatives=body.get("acceptable_alternatives", True),
-        custom_requirements=body.get("custom_requirements", ""),
-        status=body.get("status", "Researching"),
-        target_component_id=body.get("target_component_id"),
+        machine_id=values.get("machine_id"),
+        request_number=values.get("request_number") or f"REQ-{uuid4().hex[:8].upper()}",
+        machine_name=values["machine_name"],
+        part_name=values["part_name"],
+        original_part_number=values["original_part_number"],
+        manufacturer=values["manufacturer"],
+        quantity_needed=values["quantity_needed"],
+        urgency=values["urgency"],
+        acceptable_alternatives=values["acceptable_alternatives"],
+        custom_requirements=values["custom_requirements"],
+        status=values["status"],
+        target_component_id=values["target_component_id"],
         created_by=user.id,
     )
 

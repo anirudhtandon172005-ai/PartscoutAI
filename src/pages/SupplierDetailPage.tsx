@@ -23,19 +23,34 @@ export const SupplierDetailPage: React.FC<{ supplierId?: string }> = ({ supplier
   const { suppliers, allParts, navigate, addToast, addQuotation } = useApp();
 
   const supplier = suppliers.find((s) => s.id === supplierId) || suppliers[0];
-
-  // Find all component offers attributed to this supplier
-  const supplierOffers = allParts.flatMap((part) =>
-    part.offers
-      .filter((o) => o.supplierId === supplier.id || o.supplierName.includes(supplier.name))
-      .map((o) => ({ ...o, partNumber: part.partNumber, partName: part.name, partId: part.id }))
-  );
-
   const [showContactModal, setShowContactModal] = useState(false);
   const [rfqPartNumber, setRfqPartNumber] = useState('IGT205');
   const [rfqQuantity, setRfqQuantity] = useState(2);
   const [rfqUrgency, setRfqUrgency] = useState('Line Down (Critical)');
   const [rfqNotes, setRfqNotes] = useState('Need priority dispatch for Apex PackWorks Bottling Line 4.');
+
+  if (!supplier) {
+    return (
+      <div className="supplier-detail-root">
+        <DemoBadge variant="banner" lastChecked="No supplier record" />
+        <div className="error-container">
+          <AlertTriangle size={48} className="text-amber" />
+          <h3>Supplier record unavailable</h3>
+          <p>No persisted supplier record was returned for this workspace.</p>
+          <button type="button" className="btn btn-primary mt-4" onClick={() => navigate('/app/suppliers')}>
+            Return to supplier directory
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Find all component offers attributed to this persisted supplier.
+  const supplierOffers = allParts.flatMap((part) =>
+    part.offers
+      .filter((o) => o.supplierId === supplier.id || o.supplierName.includes(supplier.name))
+      .map((o) => ({ ...o, partNumber: part.partNumber, partName: part.name, partId: part.id }))
+  );
 
   const handleSimulatedQuoteSubmit = (e: React.FormEvent) => {
     e.preventDefault();

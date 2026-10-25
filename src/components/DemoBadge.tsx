@@ -14,6 +14,10 @@ export const DemoBadge: React.FC<DemoBadgeProps> = ({
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
+  // Prototype disclaimers are useful in the local fixture/demo build, but
+  // must not label real backend results as simulated in a deployed build.
+  if (import.meta.env.VITE_DEMO_MODE !== 'true' && variant !== 'timestamp-only') return null;
+
   if (variant === 'timestamp-only') {
     return (
       <span className="timestamp-badge" title="Source observation time">

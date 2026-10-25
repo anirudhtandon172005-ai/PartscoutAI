@@ -40,4 +40,4 @@ env/
 venv/
 ENV/
 .pytest_cache/
-
+*.db

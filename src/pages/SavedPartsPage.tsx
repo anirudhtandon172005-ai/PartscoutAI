@@ -17,6 +17,7 @@ export const SavedPartsPage: React.FC = () => {
   const { allParts, savedPartIds, toggleSavePart, navigate, addToast } = useApp();
 
   const savedParts = allParts.filter((p) => savedPartIds.includes(p.id));
+  const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
 
   return (
     <div className="saved-parts-root">
@@ -28,7 +29,7 @@ export const SavedPartsPage: React.FC = () => {
         <div>
           <div className="kicker-line">
             <span className="badge-tag live-cad">ENGINEERING BENCH</span>
-            <span className="text-muted-xs">Persisted in Local Storage</span>
+            <span className="text-muted-xs">{demoMode ? 'Demo workspace storage' : 'Persisted workspace storage'}</span>
           </div>
           <h1 className="saved-title">Saved Parts & Cross-References</h1>
           <p className="saved-sub">
@@ -55,9 +56,9 @@ export const SavedPartsPage: React.FC = () => {
           <button
             type="button"
             className="btn btn-outline mt-3"
-            onClick={() => navigate(`/app/results/${DEMO_SEARCH_ID}`)}
+            onClick={() => demoMode ? navigate(`/app/results/${DEMO_SEARCH_ID}`) : navigate('/app/requests/new/machine')}
           >
-            <span>Explore Line 4 Proximity Sensor Candidates</span>
+            <span>{demoMode ? 'Explore Line 4 Proximity Sensor Candidates' : 'Start a new part search'}</span>
             <ArrowRight size={14} />
           </button>
         </div>

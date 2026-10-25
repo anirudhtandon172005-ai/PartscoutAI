@@ -267,17 +267,26 @@ export async function resolveQualityIssue(id: string): Promise<void> {
 }
 
 async function createWorkspace(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const requestId = `web-${crypto.randomUUID()}`;
   const response = await fetch(`${API_BASE_URL}/api/v1/workspace/${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...await authHeaders() },
+    headers: { 'Content-Type': 'application/json', 'X-Request-ID': requestId, ...await authHeaders() },
     body: JSON.stringify(body),
   });
   const data = await handleResponse<Record<string, unknown>>(response);
   return camelizeKeys(data) as Record<string, unknown>;
 }
 
+function toSnakeCase(value: string): string {
+  return value.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`);
+}
+
+function snakeCaseKeys(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(body).map(([key, value]) => [toSnakeCase(key), value]));
+}
+
 export async function createWorkspaceRequest(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-  return createWorkspace('requests', body);
+  return createWorkspace('requests', snakeCaseKeys(body));
 }
 
 export async function createWorkspaceQuotation(body: Record<string, unknown>): Promise<Record<string, unknown>> {

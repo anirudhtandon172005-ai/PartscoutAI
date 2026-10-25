@@ -12,8 +12,12 @@ import {
   ArrowRight,
   Terminal,
   Search,
+  Clock,
 } from 'lucide-react';
 import { getSearch, getCandidates, SearchStatusResponse, SearchStage } from '../api/searches';
+
+// Client-side hard timeout (seconds) - must exceed backend deadline (120s) + buffer
+const CLIENT_TIMEOUT_SECONDS = 180;
 
 interface Stage {
   id: SearchStage;
@@ -119,7 +123,9 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
   const [searchStatus, setSearchStatus] = useState<SearchStatusResponse | null>(null);
   const [candidates, setCandidates] = useState<Awaited<ReturnType<typeof getCandidates>>['items']>([]);
   const [error, setError] = useState<string | null>(() => (searchId ? null : 'Missing search ID.'));
+  const [timedOut, setTimedOut] = useState(false);
   const addToastRef = useRef(addToast);
+  const startTimeRef = useRef<number>(Date.now());
 
   // Poll the backend sequentially; the next request is scheduled only after the current one finishes.
   useEffect(() => {
@@ -132,6 +138,17 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
 
     const loadStatus = async () => {
       try {
+        // Client-side hard timeout
+        if (Date.now() - startTimeRef.current > CLIENT_TIMEOUT_SECONDS * 1000) {
+          if (!completionNotified) {
+            completionNotified = true;
+            setTimedOut(true);
+            setError('Search timed out. The pipeline did not complete within the allowed time.');
+            addToastRef.current('Search Timed Out', 'Please retry the search.', 'warning');
+          }
+          return;
+        }
+
         const status = await getSearch(searchId, controller.signal);
         if (!active) return;
         setSearchStatus(status);
@@ -163,6 +180,7 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
       }
     };
 
+    startTimeRef.current = Date.now();
     void loadStatus();
     return () => {
       active = false;
@@ -190,10 +208,10 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
             <span className="dot pulse"></span> SEARCH EXECUTION PIPELINE
           </span>
           <h1 className="search-progress-title">
-            Researching Cross-References for {request?.original_part_number || 'Loading...'}
+            Researching Cross-References for {request?.originalPartNumber || 'Loading...'}
           </h1>
           <p className="search-progress-sub">
-            Target Part: <strong>{request?.part_name || 'Loading...'}</strong> • Facility Machine: {request?.machine_name || 'Loading...'}
+            Target Part: <strong>{request?.partName || 'Loading...'}</strong> • Facility Machine: {request?.machineName || 'Loading...'}
           </p>
         </div>
 
@@ -232,7 +250,7 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
               : isComplete
               ? 'Research Completed'
               : isRunning
-              ? `Running: ${searchStatus?.stage_message || 'Processing...'}`
+              ? `Running: ${searchStatus?.stageMessage || 'Processing...'}`
               : isQueued
               ? 'Queued...'
               : 'Initializing...'}
@@ -241,7 +259,7 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
 
         <div className="metric-col">
           <span className="strip-lbl">Progress</span>
-          <strong className="strip-val tech-font">{searchStatus?.progress_percent ?? 0}%</strong>
+          <strong className="strip-val tech-font">{searchStatus?.progressPercent ?? 0}%</strong>
         </div>
 
         <div className="metric-col">
@@ -251,7 +269,7 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
 
         <div className="metric-col">
           <span className="strip-lbl">Candidates Found</span>
-          <strong className="strip-val tech-font text-teal">{searchStatus?.candidate_count ?? 0} Equivalents</strong>
+          <strong className="strip-val tech-font text-teal">{searchStatus?.candidateCount ?? 0} Equivalents</strong>
         </div>
       </div>
 
@@ -264,6 +282,13 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
             const isStageDone = stageStatus === 'completed';
             const isStageActive = stageStatus === 'running';
             const isStageError = stageStatus === 'error';
+            const stageMetric = isStageError
+              ? 'Failed at this stage'
+              : isStageDone
+              ? 'Backend completed'
+              : isStageActive
+              ? `${searchStatus?.progressPercent ?? 0}% reported`
+              : 'Waiting for backend';
 
             return (
               <div
@@ -291,7 +316,7 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
                 <div className="stage-body">
                   <div className="stage-title-row">
                     <h4 className="stage-name">{stage.name}</h4>
-                    <span className="stage-metric tech-font">{stage.metric}</span>
+                    <span className="stage-metric tech-font">{stageMetric}</span>
                   </div>
                   <p className="stage-desc">{stage.desc}</p>
                 </div>
@@ -324,7 +349,7 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
             <>
               <div className="log-line">
                 <span className="log-bullet">{'>'}</span>
-                <span>[{searchStatus.progress_percent}%] {searchStatus.stage_message}</span>
+                <span>[{searchStatus.progressPercent}%] {searchStatus.stageMessage}</span>
               </div>
               <div className="log-line text-teal">
                 <span className="cursor-blink">▋</span>
@@ -335,7 +360,7 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
             <>
               <div className="log-line">
                 <span className="log-bullet">{'>'}</span>
-                <span>[100%] Search completed. {searchStatus.candidate_count} candidates compiled.</span>
+                <span>[100%] Search completed. {searchStatus.candidateCount} candidates compiled.</span>
               </div>
               <div className="log-line text-teal">
                 <span>Pipeline finished successfully.</span>
@@ -386,11 +411,11 @@ export const PartSearchProgress: React.FC<{ searchId?: string }> = ({ searchId }
       )}
 
       {/* Error State */}
-      {(isFailed || error) && (
+      {(isFailed || error || timedOut) && (
         <div className="error-banner">
-          <AlertTriangle size={24} className="text-red" />
+          {timedOut ? <Clock size={24} className="text-amber" /> : <AlertTriangle size={24} className="text-red" />}
           <div>
-            <h3 className="handoff-title">Search Failed</h3>
+            <h3 className="handoff-title">{timedOut ? 'Search Timed Out' : 'Search Failed'}</h3>
             <p className="handoff-desc">{error || searchStatus?.error || 'An unknown error occurred'}</p>
           </div>
           <button

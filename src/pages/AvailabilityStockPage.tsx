@@ -18,8 +18,28 @@ import {
 export const AvailabilityStockPage: React.FC<{ partId?: string }> = ({ partId = 'part-ifm-igt205' }) => {
   const { allParts, navigate, addQuotation, addToast, draftRequest } = useApp();
 
-  const component = allParts.find((p) => p.id === partId) || allParts[1];
+  // This legacy route has no search ID, so it cannot safely fetch a persisted
+  // candidate. It may show fixture inventory only in explicit demo mode.
+  const component = import.meta.env.VITE_DEMO_MODE === 'true'
+    ? allParts.find((p) => p.id === partId)
+    : undefined;
   const quantityNeeded = draftRequest.quantityNeeded || 2;
+
+  if (!component) {
+    return (
+      <div className="availability-page-root">
+        <DemoBadge variant="banner" lastChecked="Live availability unavailable" />
+        <div className="error-container">
+          <AlertTriangle size={48} className="text-amber" />
+          <h3>No live availability data</h3>
+          <p>Stock and pricing must be retrieved for this candidate before they can be displayed.</p>
+          <button type="button" className="btn btn-primary mt-4" onClick={() => navigate('/app/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleAddToQuotes = (offer: typeof component.offers[0]) => {
     addQuotation({
@@ -31,8 +51,8 @@ export const AvailabilityStockPage: React.FC<{ partId?: string }> = ({ partId = 
       quantity: quantityNeeded,
       totalPrice: offer.reportedPrice * quantityNeeded,
       leadTimeWeeks: offer.leadTimeDays / 7,
-      validUntil: '2026-11-20',
-      terms: 'Net 30. Standard commercial freight.',
+      validUntil: null,
+      terms: 'Pending supplier confirmation.',
       isOfficial: false,
       status: 'Pending Review',
     });
@@ -133,14 +153,14 @@ export const AvailabilityStockPage: React.FC<{ partId?: string }> = ({ partId = 
 
                     <td>
                       <span className="tech-font font-semibold text-lg">
-                        ${offer.reportedPrice.toFixed(2)}
+                        {offer.currency} {offer.reportedPrice.toFixed(2)}
                       </span>
                       <div className="text-muted-xs">{offer.currency} / unit</div>
                     </td>
 
                     <td>
                       <span className="tech-font font-bold text-lg text-teal">
-                        ${totalCost.toFixed(2)}
+                        {offer.currency} {totalCost.toFixed(2)}
                       </span>
                       <div className="text-muted-xs">Estimated Pre-Tax</div>
                     </td>

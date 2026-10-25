@@ -154,6 +154,7 @@ create table if not exists public.search_candidates (
   compatibility text not null check (compatibility in ('compatible', 'partial', 'incompatible', 'unknown')),
   score integer not null check (score between 0 and 100),
   specifications jsonb not null default '{}'::jsonb,
+  offers jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default timezone('utc', now())
 );
 
@@ -165,6 +166,7 @@ create table if not exists public.candidate_evidence (
   quote text not null,
   source_url text not null,
   confidence numeric(4,3) not null check (confidence between 0 and 1),
+  retrieved_at timestamptz,
   verified_by_human boolean not null default false,
   created_at timestamptz not null default timezone('utc', now())
 );
@@ -210,6 +212,7 @@ create table if not exists public.supplier_offers (
   id text primary key,
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   supplier_id text not null references public.suppliers(id) on delete cascade,
+  candidate_id text references public.search_candidates(id) on delete cascade,
   part_id text references public.parts(id) on delete set null,
   part_number text not null,
   supplier_name text not null,
@@ -321,6 +324,7 @@ create index if not exists idx_jobs_workspace_status on public.collection_jobs(w
 create index if not exists idx_quality_workspace_resolved on public.data_quality_issues(workspace_id, resolved);
 create index if not exists idx_offers_workspace_part on public.supplier_offers(workspace_id, part_id);
 create index if not exists idx_offers_supplier on public.supplier_offers(supplier_id);
+create index if not exists idx_offers_candidate on public.supplier_offers(candidate_id);
 
 -- ============================================================================
 -- Updated At Triggers

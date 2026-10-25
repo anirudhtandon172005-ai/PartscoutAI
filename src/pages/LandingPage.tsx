@@ -40,6 +40,30 @@ export const LandingPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('All Industrial Categories');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
+  if (import.meta.env.VITE_DEMO_MODE !== 'true') {
+    return (
+      <div className="landing-page-root">
+        <div className="hero-section">
+          <div className="hero-content">
+            <span className="welcome-kicker">PARTSCOUT AI • ENGINEERING SOURCING WORKSPACE</span>
+            <h1 className="hero-title">Find source-backed replacements for critical equipment.</h1>
+            <p className="hero-subtitle">
+              Sign in to search your facility registry, compare persisted candidate evidence, and review supplier offers returned by the backend.
+            </p>
+            <div className="hero-actions">
+              <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate('/login')}>
+                Sign in to workspace <ArrowRight size={16} />
+              </button>
+              <button type="button" className="btn btn-outline btn-lg" onClick={() => navigate('/signup')}>
+                Create workspace
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleHeroSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim().length > 0) {

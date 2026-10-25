@@ -292,6 +292,7 @@ class SearchCandidate(Base):
     compatibility: Mapped[str] = mapped_column(SQLEnum(Compatibility), nullable=False)
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     specifications_json: Mapped[dict] = mapped_column("specifications", JSON, nullable=False, default={})
+    offers_json: Mapped[list] = mapped_column("offers", JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     workspace: Mapped["Workspace"] = relationship("Workspace")
@@ -314,6 +315,7 @@ class CandidateEvidenceRecord(Base):
     quote: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str] = mapped_column(String(512), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    retrieved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     verified_by_human: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -364,6 +366,7 @@ class SupplierOffer(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
     supplier_id: Mapped[str] = mapped_column(String(64), ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, index=True)
+    candidate_id: Mapped[Optional[str]] = mapped_column(String(64), ForeignKey("search_candidates.id", ondelete="CASCADE"), nullable=True, index=True)
     part_id: Mapped[Optional[str]] = mapped_column(String(64), ForeignKey("parts.id", ondelete="SET NULL"), nullable=True)
     part_number: Mapped[str] = mapped_column(String(128), nullable=False)
     supplier_name: Mapped[str] = mapped_column(String(255), nullable=False)

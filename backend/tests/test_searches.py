@@ -1,5 +1,7 @@
 import os
 import tempfile
+from datetime import datetime, timezone
+from uuid import uuid4
 os.environ["TEST_MODE"] = "true"
 
 # Create a temporary database file for tests
@@ -8,11 +10,15 @@ os.environ["DATABASE_PATH"] = test_db_path
 
 import pytest
 import pytest_asyncio
+import app.services.search_service as search_service_module
 from httpx import AsyncClient, ASGITransport
 from app.main import app
-from app.schemas import SearchCreateRequest, RequirementSpec, Compatibility
+from app.schemas import SearchCreateRequest, RequirementSpec, Compatibility, CandidateResponse, CandidateOffer
 from app.services.search_service import search_service
-from app.db import init_db, close_db
+from app.services.provider_contracts import ProviderError
+from app.db import init_db, close_db, get_db_session, SearchRepository, SupplierOffer
+from sqlalchemy import select
+from app.config import settings
 
 
 # Module-level fixture for database setup/teardown
@@ -46,6 +52,21 @@ class TestHealth:
     async def test_health_returns_ok(self, client):
         response = await client.get("/health")
         assert response.json() == {"status": "ok"}
+
+    @pytest.mark.asyncio
+    async def test_health_details_exposes_safe_runtime_identity(self, client):
+        response = await client.get("/health/details")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["database_provider"] == "sqlite"
+        assert data["database_host"] is None
+        assert data["database_connected"] is True
+        assert data["schema_ready"] is True
+        assert data["schema_error"] is None
+        assert isinstance(data["configuration_warnings"], list)
+        assert "tinyfish_configured" in data
+        assert "nvidia_configured" in data
+        assert "api_key" not in response.text.lower()
 
 
 # Validation tests
@@ -98,6 +119,38 @@ class TestValidation:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
+    async def test_workspace_request_accepts_snake_case_wire_contract(self, client):
+        test_token = uuid4().hex[:8]
+        response = await client.post("/api/v1/workspace/requests", json={
+            "id": f"req-contract-{test_token}",
+            "request_number": f"REQ-2026-{test_token.upper()}",
+            "machine_id": "mach-rf480-line4",
+            "machine_name": "RF-480 Line 4",
+            "part_name": "M18 Inductive Sensor",
+            "original_part_number": "BES-516",
+            "manufacturer": "Balluff",
+            "quantity_needed": 2,
+            "urgency": "Line Down (Critical)",
+            "acceptable_alternatives": True,
+            "custom_requirements": "Flush mount",
+            "status": "Researching",
+            "target_component_id": "part-balluff-bes516",
+        })
+        assert response.status_code == 201
+        assert response.json()["part_name"] == "M18 Inductive Sensor"
+        assert response.json()["quantity_needed"] == 2
+
+    @pytest.mark.asyncio
+    async def test_workspace_request_missing_required_field_is_validation_error(self, client):
+        response = await client.post("/api/v1/workspace/requests", json={
+            "machine_name": "RF-480 Line 4",
+            "original_part_number": "BES-516",
+            "quantity_needed": 2,
+            "urgency": "Line Down (Critical)",
+        })
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
     async def test_zero_quantity_rejected(self, client):
         payload = {
             "machine_name": "Test Machine",
@@ -135,6 +188,31 @@ class TestValidation:
         }
         response = await client.post("/api/v1/searches", json=payload)
         assert response.status_code == 422
+
+
+class TestWorkspaceRegistry:
+    @pytest.mark.asyncio
+    async def test_machine_registry_is_persisted_and_returned_by_bootstrap(self, client):
+        bootstrap = await client.get("/api/v1/workspace/bootstrap")
+        assert bootstrap.status_code == 200
+        assert any(machine["id"] == "mach-rf480-line4" for machine in bootstrap.json()["machines"])
+
+        machine_id = "mach-test-persisted"
+        created = await client.post("/api/v1/workspace/machines", json={
+            "id": machine_id,
+            "manufacturer": "Test Manufacturer",
+            "model": "Test Model",
+            "machine_type": "Test Equipment",
+            "facility": "Test Plant",
+            "production_line": "Test Line",
+            "criticality": "Medium",
+            "notes": "Registry persistence test",
+        })
+        assert created.status_code == 201
+        refreshed = await client.get("/api/v1/workspace/bootstrap")
+        assert any(machine["id"] == machine_id for machine in refreshed.json()["machines"])
+        deleted = await client.delete(f"/api/v1/workspace/machines/{machine_id}")
+        assert deleted.status_code == 200
 
 
 # Search lifecycle tests
@@ -239,9 +317,150 @@ class TestSearchLifecycle:
         response = await client.get("/api/v1/searches/search-unknown/candidates")
         assert response.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_provider_error_is_terminal_failed_state(self, client, monkeypatch):
+        class FailingProvider:
+            def discover_candidates(self, request, search_id):
+                raise ProviderError("TinyFish failed")
+
+        monkeypatch.setattr(search_service_module, "_provider", FailingProvider())
+        response = await client.post("/api/v1/searches", json={
+            "machine_name": "Test Machine", "part_name": "Test Part",
+            "original_part_number": "PN-123", "manufacturer": "Test Corp",
+            "quantity": 1, "requirements": {},
+        })
+        record = await search_service.complete_search(response.json()["id"])
+        assert record.status.value == "failed"
+        assert record.error == "TinyFish failed"
+
+    @pytest.mark.asyncio
+    async def test_provider_timeout_is_terminal_failed_state(self, client, monkeypatch):
+        class SlowProvider:
+            def discover_candidates(self, request, search_id):
+                import time
+                time.sleep(0.05)
+                return []
+
+        monkeypatch.setattr(search_service_module, "_provider", SlowProvider())
+        monkeypatch.setattr(search_service_module, "SEARCH_DEADLINE_SECONDS", 0.01)
+        response = await client.post("/api/v1/searches", json={
+            "machine_name": "Test Machine", "part_name": "Test Part",
+            "original_part_number": "PN-123", "manufacturer": "Test Corp",
+            "quantity": 1, "requirements": {},
+        })
+        record = await search_service.complete_search(response.json()["id"])
+        assert record.status.value == "failed"
+        assert "timed out" in record.error
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "scenario, expected_status, expected_compatibility",
+        [
+            ("success", "completed", "compatible"),
+            ("empty", "failed", None),
+            ("single_candidate", "completed", "compatible"),
+            ("provider_failure", "failed", None),
+            ("invalid_evidence", "completed", "unknown"),
+            ("missing_required_field", "completed", "partial"),
+            ("conflicting_field", "completed", "incompatible"),
+        ],
+    )
+    async def test_fixture_scenario_lifecycle(self, client, monkeypatch, scenario, expected_status, expected_compatibility):
+        monkeypatch.setattr(settings, "fixture_scenario", scenario)
+        response = await client.post("/api/v1/searches", json={
+            "machine_name": "Test Machine",
+            "part_name": "M18 Inductive Proximity Sensor",
+            "original_part_number": "PN-123",
+            "manufacturer": "Test Corp",
+            "quantity": 1,
+            "requirements": {
+                "mounting": "flush",
+                "output": "PNP normally open",
+                "sensing_range_mm": 8,
+                "connector": "M12 4-pin",
+            },
+        })
+        assert response.status_code == 201
+        record = await search_service.complete_search(response.json()["id"])
+        assert record.status.value == expected_status
+        if expected_compatibility:
+            candidates = await client.get(f"/api/v1/searches/{record.id}/candidates")
+            target = next(item for item in candidates.json()["items"] if item["part_number"] == "IGT205")
+            assert target["compatibility"] == expected_compatibility
+
+    @pytest.mark.asyncio
+    async def test_fixture_timeout_is_terminal_failed_state(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "fixture_scenario", "timeout")
+        monkeypatch.setattr(search_service_module, "SEARCH_DEADLINE_SECONDS", 0.01)
+        response = await client.post("/api/v1/searches", json={
+            "machine_name": "Test Machine", "part_name": "M18 Sensor",
+            "original_part_number": "PN-123", "quantity": 1, "requirements": {},
+        })
+        record = await search_service.complete_search(response.json()["id"])
+        assert record.status.value == "failed"
+        assert "timed out" in record.error
+
+    @pytest.mark.asyncio
+    async def test_active_search_limit_returns_429(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "max_active_searches", 0)
+        response = await client.post("/api/v1/searches", json={
+            "machine_name": "Test Machine", "part_name": "M18 Sensor",
+            "original_part_number": "PN-123", "quantity": 1, "requirements": {},
+        })
+        assert response.status_code == 429
+
 
 # Contract tests
 class TestContract:
+    @pytest.mark.asyncio
+    async def test_complete_offer_persists_supplier_and_candidate_link(self, client):
+        response = await client.post("/api/v1/searches", json={
+            "machine_name": "Test Machine",
+            "part_name": "Test Part",
+            "original_part_number": "PN-OFFER",
+            "quantity": 1,
+            "requirements": {},
+        })
+        search_id = response.json()["id"]
+        offer = CandidateOffer(
+            supplier_name="Supplier Test",
+            supplier_domain="supplier.test",
+            reported_price=12.5,
+            currency="USD",
+            stock_status="In Stock",
+            quantity_available=4,
+            lead_time_days=2,
+            min_order_quantity=1,
+            source_url="https://supplier.test/part",
+            product_url="https://supplier.test/part",
+            evidence_quote="In stock: 4 units at USD 12.50 each",
+            confidence=0.9,
+            last_checked=datetime.now(timezone.utc),
+        )
+        candidate = CandidateResponse(
+            id=f"{search_id}-offer-candidate",
+            part_number="PN-OFFER-CANDIDATE",
+            manufacturer="Supplier Test",
+            compatibility="unknown",
+            score=0,
+            specifications={},
+            evidence=[],
+            offers=[offer],
+        )
+        async with get_db_session() as session:
+            await SearchRepository(session).save_candidates(
+                search_id,
+                [candidate],
+                workspace_id="00000000-0000-0000-0000-000000000002",
+            )
+        candidates_response = await client.get(f"/api/v1/searches/{search_id}/candidates")
+        assert candidates_response.status_code == 200
+        assert candidates_response.json()["items"][0]["offers"][0]["supplier_name"] == "Supplier Test"
+        async with get_db_session() as session:
+            row = (await session.execute(select(SupplierOffer).where(SupplierOffer.candidate_id == candidate.id))).scalar_one()
+            assert row.reported_price == 12.5
+            assert row.supplier_name == "Supplier Test"
+
     @pytest.mark.asyncio
     async def test_candidate_score_is_0_to_100(self, client):
         payload = {
